@@ -195,6 +195,10 @@ npm test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on adding tools and submitting PRs.
 
+## Note on Package Naming
+
+The GitHub repo is `mcp-jira` but the npm package is `mcp-jira-scoped`. We plan to unify under `mcp-jira` in a future release. For now, use `npx -y mcp-jira-scoped` to run the server.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
