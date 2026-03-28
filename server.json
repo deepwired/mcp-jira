@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.deepwired/mcp-jira-scoped",
+  "description": "MCP server for Atlassian Jira with scoped API tokens — the only server that supports Atlassian's modern scoped authentication via api.atlassian.com",
+  "repository": {
+    "url": "https://github.com/deepwired/mcp-jira",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mcp-jira-scoped",
+      "version": "1.0.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "JIRA_INSTANCE",
+          "description": "Jira instance name (e.g. 'mycompany' for mycompany.atlassian.net)",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "JIRA_USER_EMAIL",
+          "description": "Email associated with the API token",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "JIRA_API_TOKEN",
+          "description": "Scoped API token from https://id.atlassian.com/manage-profile/security/api-tokens",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "JIRA_SCOPES",
+          "description": "Comma-separated scopes: read:jira-work, write:jira-work, read:jira-user, read:me. Defaults to read:jira-work",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "JIRA_CLOUD_ID",
+          "description": "Atlassian Cloud ID (auto-fetched if not set). Find at https://yoursite.atlassian.net/_edge/tenant_info",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# Local planning docs — not shipped with the repo
+gitignore-*

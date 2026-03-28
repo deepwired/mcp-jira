@@ -1,0 +1,39 @@
+build:
+  dockerBuildPath: .
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - jiraInstance
+      - jiraUserEmail
+      - jiraApiToken
+    properties:
+      jiraInstance:
+        type: string
+        description: "Jira instance name (e.g. 'mycompany' for mycompany.atlassian.net)"
+      jiraUserEmail:
+        type: string
+        description: "Email associated with the API token"
+      jiraApiToken:
+        type: string
+        description: "Scoped API token from Atlassian"
+      jiraScopes:
+        type: string
+        default: "read:jira-work"
+        description: "Comma-separated scopes: read:jira-work, write:jira-work, read:jira-user, read:me"
+      jiraCloudId:
+        type: string
+        description: "Atlassian Cloud ID (auto-fetched if not set)"
+  commandFunction: |
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'mcp-jira-scoped'],
+      env: {
+        JIRA_INSTANCE: config.jiraInstance,
+        JIRA_USER_EMAIL: config.jiraUserEmail,
+        JIRA_API_TOKEN: config.jiraApiToken,
+        ...(config.jiraScopes ? { JIRA_SCOPES: config.jiraScopes } : {}),
+        ...(config.jiraCloudId ? { JIRA_CLOUD_ID: config.jiraCloudId } : {})
+      }
+    })

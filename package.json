@@ -1,0 +1,70 @@
+{
+  "name": "mcp-jira-scoped",
+  "version": "1.0.0",
+  "description": "MCP server for Atlassian Jira with scoped API tokens — the only MCP server that supports Atlassian's modern scoped authentication",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mcp-jira-scoped": "dist/index.js"
+  },
+  "mcpName": "io.github.deepwired/mcp-jira-scoped",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "jira",
+    "atlassian",
+    "scoped-tokens",
+    "api-tokens",
+    "claude",
+    "anthropic",
+    "ai",
+    "llm",
+    "ai-integration",
+    "ai-connector",
+    "project-management",
+    "issue-tracking",
+    "tools",
+    "typescript",
+    "cli"
+  ],
+  "author": "Deep Singh Baweja",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deepwired/mcp-jira.git"
+  },
+  "homepage": "https://github.com/deepwired/mcp-jira#readme",
+  "bugs": {
+    "url": "https://github.com/deepwired/mcp-jira/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.50",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ]
+}
