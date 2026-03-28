@@ -61,6 +61,20 @@ Use [GitHub Issues](https://github.com/deepwired/mcp-jira/issues). Include:
 - Steps to reproduce
 - Node version, OS, MCP client (Claude Desktop, Cursor, etc.)
 
+## Test Fixtures & the Pre-Commit Hook
+
+The repo has a pre-commit hook that blocks commits containing potential secrets. When writing tests that set `JIRA_API_TOKEN`, use **only** the dummy values `'token'` or `'secret'` — these are the only allowlisted values. Any other string will trigger the hook and block your commit.
+
+```typescript
+// GOOD — these are allowlisted
+process.env.JIRA_API_TOKEN = 'token';
+process.env.JIRA_API_TOKEN = 'secret';
+```
+
+Do **not** use realistic-looking strings (e.g. `'my-test-value-12345'`) — the pre-commit hook will block the commit.
+
+If the hook blocks your commit and you're certain it's a false positive, you can bypass it with `git commit --no-verify` — but please double-check first.
+
 ## Code Style
 
 - TypeScript strict mode

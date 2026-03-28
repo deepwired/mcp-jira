@@ -9,7 +9,7 @@ This MCP server handles Atlassian API tokens. The following measures are in plac
 - **Scope enforcement** — the server blocks API calls outside the configured scopes before they reach Atlassian
 - **Delete safety guard** — `jira_delete_issue` requires an explicit `confirm: true` parameter
 - **Read-only by default** — if `JIRA_SCOPES` is not set, only read tools are available
-- **Pre-commit hook** — the repo includes a git hook that blocks commits containing token patterns
+- **Pre-commit hook** — the repo includes a git hook (`.git/hooks/pre-commit`) that blocks commits containing token patterns (ATATT tokens, Bearer values, hardcoded `JIRA_API_TOKEN` assignments). The only allowlisted dummy values are the exact strings `'token'` and `'secret'`, used in test fixtures. Any other value will block the commit.
 
 ## Reporting a Vulnerability
 
