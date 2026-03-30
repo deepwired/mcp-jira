@@ -52,9 +52,7 @@ export function createUserTools(client: JiraClient) {
           startAt: String(parsed.startAt),
           maxResults: String(parsed.maxResults),
         });
-        const res = await client.get<JiraUser[]>(
-          `/rest/api/3/user/search?${params.toString()}`,
-        );
+        const res = await client.get<JiraUser[]>(`/rest/api/3/user/search?${params.toString()}`);
         if (!res.ok) return textResult(res.error!, true);
 
         const users = res.data!;

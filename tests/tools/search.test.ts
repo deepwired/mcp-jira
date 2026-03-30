@@ -13,19 +13,34 @@ const testConfig: JiraConfig = {
 
 describe('jira_search', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('3. valid JQL calls search/jql endpoint with encoded query', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        issues: [
-          { key: 'PROJ-1', id: '1', fields: { summary: 'First', status: { name: 'Open' }, assignee: { displayName: 'Alice' } } },
-          { key: 'PROJ-2', id: '2', fields: { summary: 'Second', status: { name: 'Done' }, assignee: null } },
-        ],
-        isLast: true,
-      }),
+      json: () =>
+        Promise.resolve({
+          issues: [
+            {
+              key: 'PROJ-1',
+              id: '1',
+              fields: {
+                summary: 'First',
+                status: { name: 'Open' },
+                assignee: { displayName: 'Alice' },
+              },
+            },
+            {
+              key: 'PROJ-2',
+              id: '2',
+              fields: { summary: 'Second', status: { name: 'Done' }, assignee: null },
+            },
+          ],
+          isLast: true,
+        }),
       headers: new Headers(),
     });
 
@@ -63,12 +78,17 @@ describe('jira_search', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        issues: [
-          { key: 'PROJ-1', id: '1', fields: { summary: 'First', status: { name: 'Open' }, assignee: null } },
-        ],
-        isLast: false,
-      }),
+      json: () =>
+        Promise.resolve({
+          issues: [
+            {
+              key: 'PROJ-1',
+              id: '1',
+              fields: { summary: 'First', status: { name: 'Open' }, assignee: null },
+            },
+          ],
+          isLast: false,
+        }),
       headers: new Headers(),
     });
 
