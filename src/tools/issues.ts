@@ -4,7 +4,17 @@ import { JiraIssue, ToolResult } from '../types.js';
 
 const getIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
-  fields: z.array(z.string()).optional().describe('Specific fields to return. Defaults to common fields.'),
+  fields: z
+    .array(z.string())
+    .optional()
+    .describe('Specific fields to return. Defaults to common fields.'),
+  includeCustomFields: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      'When true, fetches all fields (including customfield_*) and appends them to the output.',
+    ),
 });
 
 const createIssueSchema = z.object({
@@ -37,7 +47,21 @@ const updateIssueSchema = z.object({
 
 const transitionIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required'),
-  transitionId: z.string().optional().describe('Transition ID. If omitted, lists available transitions.'),
+  transitionId: z
+    .string()
+    .optional()
+    .describe('Transition ID. If omitted, lists available transitions.'),
+  fields: z
+    .record(z.unknown())
+    .optional()
+    .describe(
+      'Fields required by the transition screen, e.g. {"resolution": {"name": "Fixed"}}. Use jira_get_transitions to discover required fields.',
+    ),
+  comment: z.string().optional().describe('Optional comment to add when transitioning.'),
+});
+
+const getTransitionsSchema = z.object({
+  issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
 });
 
 const deleteIssueSchema = z.object({
@@ -49,7 +73,32 @@ function textResult(text: string, isError = false): ToolResult {
   return { content: [{ type: 'text', text }], isError };
 }
 
-function formatIssue(issue: JiraIssue): string {
+const STANDARD_FIELDS = new Set([
+  'summary',
+  'status',
+  'issuetype',
+  'priority',
+  'assignee',
+  'reporter',
+  'description',
+  'labels',
+  'components',
+  'comment',
+  'attachment',
+  'created',
+  'updated',
+  'parent',
+  'subtasks',
+  'fixVersions',
+  'versions',
+  'project',
+  'watches',
+  'votes',
+  'resolutiondate',
+  'resolution',
+]);
+
+function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
   const f = issue.fields;
   const lines = [
     `**${issue.key}**: ${f.summary ?? 'No summary'}`,
@@ -62,7 +111,22 @@ function formatIssue(issue: JiraIssue): string {
   ];
 
   if (f.description) {
-    lines.push(`\nDescription:\n${typeof f.description === 'string' ? f.description : JSON.stringify(f.description, null, 2)}`);
+    lines.push(
+      `\nDescription:\n${typeof f.description === 'string' ? f.description : JSON.stringify(f.description, null, 2)}`,
+    );
+  }
+
+  if (includeCustomFields) {
+    const customEntries = Object.entries(f).filter(
+      ([key, val]) => !STANDARD_FIELDS.has(key) && val !== null && val !== undefined,
+    );
+    if (customEntries.length > 0) {
+      lines.push('\n## Custom Fields');
+      for (const [key, val] of customEntries) {
+        const display = typeof val === 'object' ? JSON.stringify(val) : String(val);
+        lines.push(`${key}: ${display}`);
+      }
+    }
   }
 
   return lines.join('\n');
@@ -85,16 +149,24 @@ export function createIssueTools(client: JiraClient) {
   return {
     jira_get_issue: {
       description:
-        'Get a Jira issue by key (e.g. PROJ-123). Returns summary, status, assignee, description, comments.',
+        'Get a Jira issue by key (e.g. PROJ-123). Returns summary, status, assignee, description, comments. Pass includeCustomFields: true to also return all custom fields.',
       inputSchema: getIssueSchema,
       handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
         const parsed = getIssueSchema.parse(args);
-        const fields = parsed.fields?.join(',') || 'summary,status,issuetype,priority,assignee,reporter,description,labels,components,comment';
+        let fields: string;
+        if (parsed.fields && parsed.fields.length > 0) {
+          fields = parsed.fields.join(',');
+        } else if (parsed.includeCustomFields) {
+          fields = '*all';
+        } else {
+          fields =
+            'summary,status,issuetype,priority,assignee,reporter,description,labels,components,comment';
+        }
         const res = await client.get<JiraIssue>(
           `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}?fields=${fields}`,
         );
         if (!res.ok) return textResult(res.error!, true);
-        return textResult(formatIssue(res.data!));
+        return textResult(formatIssue(res.data!, parsed.includeCustomFields));
       },
     },
 
@@ -160,10 +232,9 @@ export function createIssueTools(client: JiraClient) {
           return textResult('No fields to update — provide at least one field.', true);
         }
 
-        const res = await client.put(
-          `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}`,
-          { fields },
-        );
+        const res = await client.put(`/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}`, {
+          fields,
+        });
         if (!res.ok) return textResult(res.error!, true);
         return textResult(`Issue **${parsed.issueKey}** updated successfully.`);
       },
@@ -171,33 +242,99 @@ export function createIssueTools(client: JiraClient) {
 
     jira_transition_issue: {
       description:
-        'Transition a Jira issue to a new status. If no transitionId is provided, lists available transitions.',
+        'Transition a Jira issue to a new status. If no transitionId is provided, lists available transitions. Pass fields to satisfy required transition screen fields (use jira_get_transitions to discover them).',
       inputSchema: transitionIssueSchema,
       handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
         const parsed = transitionIssueSchema.parse(args);
         const issueKey = encodeURIComponent(parsed.issueKey);
 
         if (!parsed.transitionId) {
-          const res = await client.get<{ transitions: Array<{ id: string; name: string; to: { name: string } }> }>(
-            `/rest/api/3/issue/${issueKey}/transitions`,
-          );
+          const res = await client.get<{
+            transitions: Array<{ id: string; name: string; to: { name: string } }>;
+          }>(`/rest/api/3/issue/${issueKey}/transitions`);
           if (!res.ok) return textResult(res.error!, true);
           const transitions = res.data!.transitions;
           if (transitions.length === 0) {
             return textResult('No transitions available for this issue.');
           }
-          const lines = transitions.map(
-            (t) => `- **${t.name}** (id: ${t.id}) → ${t.to.name}`,
+          const lines = transitions.map((t) => `- **${t.name}** (id: ${t.id}) → ${t.to.name}`);
+          return textResult(
+            `Available transitions for ${parsed.issueKey}:\n${lines.join('\n')}\n\nTip: use jira_get_transitions to see required fields for each transition.`,
           );
-          return textResult(`Available transitions for ${parsed.issueKey}:\n${lines.join('\n')}`);
         }
 
-        const res = await client.post(
-          `/rest/api/3/issue/${issueKey}/transitions`,
-          { transition: { id: parsed.transitionId } },
-        );
+        const body: Record<string, unknown> = { transition: { id: parsed.transitionId } };
+        if (parsed.fields && Object.keys(parsed.fields).length > 0) {
+          body.fields = parsed.fields;
+        }
+        if (parsed.comment) {
+          body.update = {
+            comment: [{ add: { body: plainTextToAdf(parsed.comment) } }],
+          };
+        }
+
+        const res = await client.post(`/rest/api/3/issue/${issueKey}/transitions`, body);
         if (!res.ok) return textResult(res.error!, true);
         return textResult(`Issue **${parsed.issueKey}** transitioned successfully.`);
+      },
+    },
+
+    jira_get_transitions: {
+      description:
+        'Get available transitions for a Jira issue with their required field definitions. Use this before calling jira_transition_issue to discover which fields are required by the transition screen.',
+      inputSchema: getTransitionsSchema,
+      handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
+        const parsed = getTransitionsSchema.parse(args);
+        const issueKey = encodeURIComponent(parsed.issueKey);
+
+        const res = await client.get<{
+          transitions: Array<{
+            id: string;
+            name: string;
+            to: { id: string; name: string };
+            fields: Record<
+              string,
+              {
+                required: boolean;
+                name: string;
+                allowedValues?: unknown[];
+                schema?: Record<string, unknown>;
+              }
+            >;
+          }>;
+        }>(`/rest/api/3/issue/${issueKey}/transitions?expand=transitions.fields`);
+
+        if (!res.ok) return textResult(res.error!, true);
+        const transitions = res.data!.transitions;
+
+        if (transitions.length === 0) {
+          return textResult(`No transitions available for ${parsed.issueKey}.`);
+        }
+
+        const lines: string[] = [`# Available transitions for **${parsed.issueKey}**\n`];
+        for (const t of transitions) {
+          lines.push(`## ${t.name} (id: \`${t.id}\`) → ${t.to.name}`);
+          const fieldEntries = Object.entries(t.fields ?? {});
+          if (fieldEntries.length === 0) {
+            lines.push('_No screen fields required._');
+          } else {
+            for (const [fieldId, meta] of fieldEntries) {
+              const req = meta.required ? '**required**' : 'optional';
+              const type = (meta.schema as Record<string, unknown> | undefined)?.type ?? 'unknown';
+              lines.push(`- \`${fieldId}\` — ${meta.name} (${req}, type: ${type})`);
+              if (meta.allowedValues && (meta.allowedValues as unknown[]).length > 0) {
+                const vals = (meta.allowedValues as Array<Record<string, unknown>>)
+                  .slice(0, 10)
+                  .map((v) => v.name ?? v.value ?? v.id ?? JSON.stringify(v))
+                  .join(', ');
+                lines.push(`  Allowed values: ${vals}`);
+              }
+            }
+          }
+          lines.push('');
+        }
+
+        return textResult(lines.join('\n'));
       },
     },
 
@@ -215,9 +352,7 @@ export function createIssueTools(client: JiraClient) {
           );
         }
 
-        const res = await client.delete(
-          `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}`,
-        );
+        const res = await client.delete(`/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}`);
         if (!res.ok) return textResult(res.error!, true);
         return textResult(`Issue **${parsed.issueKey}** deleted successfully.`);
       },

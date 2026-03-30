@@ -29,12 +29,14 @@ src/
 ├── client.ts         # HTTP client for Atlassian API gateway
 ├── types.ts          # Shared TypeScript types
 └── tools/
-    ├── issues.ts     # Get, create, update, delete, transition
+    ├── issues.ts     # Get, create, update, delete, transition, get transitions
     ├── search.ts     # JQL search
     ├── comments.ts   # List and add comments
     ├── projects.ts   # List and get projects
     ├── users.ts      # Get and search users
-    └── links.ts      # Link issues, list link types
+    ├── links.ts      # Link issues, list link types
+    ├── attachments.ts # List, upload, and delete attachments
+    └── fields.ts     # List all fields including custom fields
 ```
 
 ### Adding a New Tool

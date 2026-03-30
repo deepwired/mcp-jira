@@ -13,6 +13,8 @@ import { createCommentTools } from './tools/comments.js';
 import { createProjectTools } from './tools/projects.js';
 import { createUserTools } from './tools/users.js';
 import { createLinkTools } from './tools/links.js';
+import { createAttachmentTools } from './tools/attachments.js';
+import { createFieldTools } from './tools/fields.js';
 
 function errorResult(message: string) {
   return {
@@ -38,6 +40,8 @@ export function createServer(config: JiraConfig) {
     ...createProjectTools(client),
     ...createUserTools(client),
     ...createLinkTools(client),
+    ...createAttachmentTools(client),
+    ...createFieldTools(client),
   };
 
   const server = new McpServer({
@@ -51,30 +55,25 @@ export function createServer(config: JiraConfig) {
 
     const shape = tool.inputSchema.shape;
 
-    server.tool(
-      name,
-      tool.description,
-      shape,
-      async (args) => {
-        try {
-          enforceScope(name, config.scopes);
-          const result = await tool.handler(args as Record<string, unknown>);
-          return {
-            content: result.content,
-            isError: result.isError,
-          };
-        } catch (err) {
-          if (err instanceof z.ZodError) {
-            const messages = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ');
-            return errorResult(`Validation error: ${messages}`);
-          }
-          if (err instanceof Error) {
-            return errorResult(err.message);
-          }
-          return errorResult(String(err));
+    server.tool(name, tool.description, shape, async (args) => {
+      try {
+        enforceScope(name, config.scopes);
+        const result = await tool.handler(args as Record<string, unknown>);
+        return {
+          content: result.content,
+          isError: result.isError,
+        };
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          const messages = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ');
+          return errorResult(`Validation error: ${messages}`);
         }
-      },
-    );
+        if (err instanceof Error) {
+          return errorResult(err.message);
+        }
+        return errorResult(String(err));
+      }
+    });
   }
 
   return server;

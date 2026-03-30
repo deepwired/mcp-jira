@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { buildHeaders, sanitizeError, loadConfig, parseScopes } from '../src/auth.js';
 
 describe('Auth Layer', () => {

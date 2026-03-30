@@ -63,6 +63,38 @@ export interface JiraTransition {
   id: string;
   name: string;
   to: { id: string; name: string };
+  fields?: Record<string, JiraFieldMeta>;
+}
+
+export interface JiraFieldMeta {
+  required: boolean;
+  name: string;
+  schema?: Record<string, unknown>;
+  allowedValues?: unknown[];
+}
+
+export interface JiraAttachment {
+  id: string;
+  filename: string;
+  author: { displayName: string; accountId: string };
+  created: string;
+  size: number;
+  mimeType: string;
+  content: string;
+}
+
+export interface JiraField {
+  id: string;
+  name: string;
+  custom: boolean;
+  orderable: boolean;
+  navigable: boolean;
+  searchable: boolean;
+  schema?: {
+    type: string;
+    custom?: string;
+    customId?: number;
+  };
 }
 
 export interface JiraUser {
