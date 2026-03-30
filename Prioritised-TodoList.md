@@ -11,13 +11,14 @@
 
 ## Issue Tools
 - [x] Get issue by key
+- [x] Get issue with custom fields (`includeCustomFields: true` returns all `customfield_*` values)
 - [x] Create issue (with custom fields support)
 - [x] Update issue (with custom fields support)
 - [x] Delete issue (with `confirm: true` safety guard)
-- [x] Transition issue (list transitions + execute)
+- [x] Transition issue (list transitions + execute, with `fields` and `comment` for transition screens)
+- [x] Get transition metadata with required screen fields (`jira_get_transitions` with `?expand=transitions.fields`)
 - [ ] Assign issue (dedicated shortcut tool)
 - [ ] Get create metadata (discover required fields per project/issue type)
-- [ ] Get transition metadata (discover required fields per transition)
 
 ## Search
 - [x] JQL search with pagination (via `/search/jql`)
@@ -54,9 +55,13 @@
 - [ ] Delete worklog
 
 ## Attachments
-- [ ] List attachments on an issue
-- [ ] Download attachment
-- [ ] Upload attachment
+- [x] List attachments on an issue (`jira_list_attachments`)
+- [x] Upload attachment from local file path (`jira_add_attachment`)
+- [x] Delete attachment with safety guard (`jira_delete_attachment`)
+- [ ] Download attachment content
+
+## Fields
+- [x] List all fields including custom fields (`jira_list_fields`, optional `customOnly` filter)
 
 ## Boards & Sprints
 - [ ] List boards

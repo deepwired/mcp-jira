@@ -107,12 +107,15 @@ Add to `.vscode/mcp.json`:
 
 | Tool | Description |
 |------|-------------|
-| `jira_get_issue` | Get issue by key (e.g. PROJ-123) — returns summary, status, assignee, description |
+| `jira_get_issue` | Get issue by key. Pass `includeCustomFields: true` to return all custom fields |
 | `jira_search` | Search issues via JQL with pagination |
 | `jira_list_comments` | List comments on an issue |
 | `jira_list_projects` | List accessible projects |
 | `jira_get_project` | Get project details by key |
 | `jira_list_link_types` | List available issue link types |
+| `jira_list_fields` | List all fields (system + custom) — discover `customfield_*` IDs |
+| `jira_list_attachments` | List attachments on an issue with filename, size, MIME type, and download URL |
+| `jira_get_transitions` | Get available transitions for an issue with required screen fields expanded |
 
 ### Write Tools (`write:jira-work`)
 
@@ -121,9 +124,11 @@ Add to `.vscode/mcp.json`:
 | `jira_create_issue` | Create an issue (task, bug, story, epic). Supports custom fields |
 | `jira_update_issue` | Update fields on an issue. Supports custom fields |
 | `jira_add_comment` | Add a comment (plain text auto-converted to ADF) |
-| `jira_transition_issue` | Move an issue to a new status. Lists transitions if no ID given |
+| `jira_transition_issue` | Move an issue to a new status. Accepts `fields` and `comment` for transition screens |
 | `jira_delete_issue` | Delete an issue (requires `confirm: true` safety guard) |
 | `jira_link_issues` | Link two issues (blocks, relates, split, clone, etc.) |
+| `jira_add_attachment` | Upload a local file as an attachment to an issue |
+| `jira_delete_attachment` | Delete an attachment by ID (requires `confirm: true` safety guard) |
 
 ### User Tools (`read:jira-user`)
 

@@ -13,7 +13,9 @@ const testConfig: JiraConfig = {
 
 describe('jira_link_issues', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('creates a link between two issues', async () => {
     global.fetch = vi.fn().mockResolvedValue({
@@ -43,25 +45,32 @@ describe('jira_link_issues', () => {
   it('requires linkType', async () => {
     const tools = createLinkTools(new JiraClient(testConfig));
     await expect(
-      tools.jira_link_issues.handler({ linkType: '', inwardIssueKey: 'A-1', outwardIssueKey: 'B-1' }),
+      tools.jira_link_issues.handler({
+        linkType: '',
+        inwardIssueKey: 'A-1',
+        outwardIssueKey: 'B-1',
+      }),
     ).rejects.toThrow();
   });
 });
 
 describe('jira_list_link_types', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('returns formatted link types', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        issueLinkTypes: [
-          { id: '1', name: 'Blocks', inward: 'is blocked by', outward: 'blocks' },
-          { id: '2', name: 'Relates', inward: 'relates to', outward: 'relates to' },
-        ],
-      }),
+      json: () =>
+        Promise.resolve({
+          issueLinkTypes: [
+            { id: '1', name: 'Blocks', inward: 'is blocked by', outward: 'blocks' },
+            { id: '2', name: 'Relates', inward: 'relates to', outward: 'relates to' },
+          ],
+        }),
       headers: new Headers(),
     });
 

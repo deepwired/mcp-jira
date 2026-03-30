@@ -13,7 +13,9 @@ const testConfig: JiraConfig = {
 
 describe('jira_add_comment', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('8. converts plain text to ADF and calls POST', async () => {
     global.fetch = vi.fn().mockResolvedValue({
@@ -55,7 +57,9 @@ describe('jira_add_comment', () => {
 
 describe('jira_list_comments', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('returns formatted comments', async () => {
     global.fetch = vi.fn().mockResolvedValue({
@@ -70,7 +74,11 @@ describe('jira_list_comments', () => {
             {
               id: '100',
               author: { displayName: 'Alice', accountId: '1' },
-              body: { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Great work!' }] }] },
+              body: {
+                type: 'doc',
+                version: 1,
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Great work!' }] }],
+              },
               created: '2024-01-01',
               updated: '2024-01-01',
             },

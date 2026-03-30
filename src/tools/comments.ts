@@ -47,7 +47,8 @@ function extractTextFromAdf(node: Record<string, unknown>): string {
 export function createCommentTools(client: JiraClient) {
   return {
     jira_list_comments: {
-      description: 'List comments on a Jira issue. Returns comment bodies, authors, and timestamps.',
+      description:
+        'List comments on a Jira issue. Returns comment bodies, authors, and timestamps.',
       inputSchema: listCommentsSchema,
       handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
         const parsed = listCommentsSchema.parse(args);
@@ -72,7 +73,8 @@ export function createCommentTools(client: JiraClient) {
     },
 
     jira_add_comment: {
-      description: 'Add a comment to a Jira issue. Accepts plain text (converted to ADF internally).',
+      description:
+        'Add a comment to a Jira issue. Accepts plain text (converted to ADF internally).',
       inputSchema: addCommentSchema,
       handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
         const parsed = addCommentSchema.parse(args);
@@ -81,9 +83,7 @@ export function createCommentTools(client: JiraClient) {
           { body: plainTextToAdf(parsed.body) },
         );
         if (!res.ok) return textResult(res.error!, true);
-        return textResult(
-          `Comment added to **${parsed.issueKey}** (comment id: ${res.data!.id})`,
-        );
+        return textResult(`Comment added to **${parsed.issueKey}** (comment id: ${res.data!.id})`);
       },
     },
   };

@@ -13,7 +13,9 @@ const testConfig: JiraConfig = {
 
 describe('jira_list_projects', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('returns formatted project list', async () => {
     global.fetch = vi.fn().mockResolvedValue({
@@ -25,8 +27,20 @@ describe('jira_list_projects', () => {
           maxResults: 20,
           total: 2,
           values: [
-            { id: '1', key: 'PROJ', name: 'Project One', projectTypeKey: 'software', style: 'next-gen' },
-            { id: '2', key: 'TEAM', name: 'Team Project', projectTypeKey: 'software', style: 'classic' },
+            {
+              id: '1',
+              key: 'PROJ',
+              name: 'Project One',
+              projectTypeKey: 'software',
+              style: 'next-gen',
+            },
+            {
+              id: '2',
+              key: 'TEAM',
+              name: 'Team Project',
+              projectTypeKey: 'software',
+              style: 'classic',
+            },
           ],
         }),
       headers: new Headers(),
@@ -43,7 +57,9 @@ describe('jira_list_projects', () => {
 
 describe('jira_get_project', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   it('returns project details', async () => {
     global.fetch = vi.fn().mockResolvedValue({

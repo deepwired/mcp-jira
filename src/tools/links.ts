@@ -46,9 +46,7 @@ export function createLinkTools(client: JiraClient) {
       description: 'List all available issue link types (e.g. Blocks, Relates, Cloners).',
       inputSchema: listLinkTypesSchema,
       handler: async (_args: Record<string, unknown>): Promise<ToolResult> => {
-        const res = await client.get<{ issueLinkTypes: LinkType[] }>(
-          '/rest/api/3/issueLinkType',
-        );
+        const res = await client.get<{ issueLinkTypes: LinkType[] }>('/rest/api/3/issueLinkType');
         if (!res.ok) return textResult(res.error!, true);
 
         const types = res.data!.issueLinkTypes;
