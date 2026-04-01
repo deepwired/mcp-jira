@@ -1,6 +1,6 @@
 {
   "name": "mcp-jira-scoped",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "MCP server for Atlassian Jira with scoped API tokens — the only MCP server that supports Atlassian's modern scoped authentication",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
