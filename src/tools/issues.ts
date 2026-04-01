@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
 import { JiraIssue, ToolResult } from '../types.js';
+import { plainTextToAdf } from './comments.js';
 
 const getIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
@@ -130,19 +131,6 @@ function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
   }
 
   return lines.join('\n');
-}
-
-function plainTextToAdf(text: string) {
-  return {
-    type: 'doc',
-    version: 1,
-    content: [
-      {
-        type: 'paragraph',
-        content: [{ type: 'text', text }],
-      },
-    ],
-  };
 }
 
 export function createIssueTools(client: JiraClient) {

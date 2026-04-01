@@ -6,6 +6,7 @@ dist/
 .env
 .env.*
 !.env.example
+.mcpregistry_*
 
 # Local planning docs — not shipped with the repo
 gitignore-*

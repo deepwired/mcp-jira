@@ -27,7 +27,8 @@
 ## Comments
 - [x] List comments on an issue
 - [x] Add comment (plain text auto-converted to ADF)
-- [ ] Edit comment
+- [x] Edit comment (`jira_update_comment`)
+- [x] Link-aware ADF converter (auto-links bare URLs, parses `[label|url]` wiki markup, round-trip safe)
 - [ ] Delete comment
 
 ## Projects
@@ -74,7 +75,7 @@
 - [x] npm package (`mcp-jira-scoped`)
 - [x] MCP Registry config (`server.json`)
 - [x] Smithery config (`smithery.yaml`)
-- [ ] Publish to npm
+- [x] Publish to npm (v1.1.0)
 - [ ] Register on MCP Registry
 - [ ] Register on Smithery.ai
 - [ ] Submit to awesome-mcp-servers list
@@ -82,6 +83,6 @@
 ## CI & Quality
 - [x] GitHub Actions CI (Node 18, 20, 22)
 - [x] Pre-commit hook (secret detection)
-- [x] 59 offline tests passing
+- [x] 91 offline tests passing
 - [ ] Code coverage reporting
 - [ ] Automated npm publish on tag
