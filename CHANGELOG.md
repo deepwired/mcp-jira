@@ -154,6 +154,21 @@ correctly returned 401 for want of a classic scope. That also settles a
 long-standing and incorrectly-answered question in the Atlassian community —
 scoped API tokens *can* reach `/rest/agile/1.0`.
 
+### CI
+
+CI had been failing on `main` since March and nobody noticed, because the
+README advertised it as passing. The cause was not this branch: vitest's `vite`
+dependency requires Node `^20.19 || >=22.12`, so the Node 18 job could never
+have run the test suite, and `fail-fast` then cancelled the other versions and
+hid whether they would have passed.
+
+Restructured rather than papered over. The full suite now runs on Node 20, 22
+and 24 with `fail-fast: false`. Node 18 support is still claimed in `engines`
+and the runtime genuinely has no higher floor, so it is now *verified* by a new
+no-network smoke test (`npm run smoke`) that drives the built binary over MCP
+stdio and asserts it starts, lists a sorted and fully-schema'd tool roster, and
+writes nothing to stderr. That runs on 18, 20, 22 and 24.
+
 ## [1.2.0] — 2026-04-01
 
 ### Added

@@ -7,11 +7,16 @@ on:
     branches: [main]
 
 jobs:
+  # Full suite. vitest's vite dependency requires ^20.19 || >=22.12, so the
+  # test job cannot run on Node 18 — see the smoke job for that.
   test:
     runs-on: ubuntu-latest
     strategy:
+      # Without this, one version failing cancels the others and hides whether
+      # they would have passed.
+      fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +25,27 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
       - run: npm run lint
+      - run: npm run build
       - run: npm test
       - run: npm run check:release
+
+  # package.json claims engines >=18, and the runtime genuinely has no higher
+  # floor. The test tooling cannot run there, so verify the claim by driving
+  # the built binary over MCP stdio instead of asserting it.
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      - run: npx tsc
+      - run: npm run smoke

@@ -314,7 +314,7 @@ npm run build
 npm test
 ```
 
-260 offline tests, no network required. See [CONTRIBUTING.md](CONTRIBUTING.md) for adding tools, and [docs/PARITY-PLAN.md](docs/PARITY-PLAN.md) for the roadmap and the research behind it.
+269 offline tests, no network required, plus a no-network smoke test of the built binary (`npm run smoke`) that runs down to Node 18. See [CONTRIBUTING.md](CONTRIBUTING.md) for adding tools, and [docs/PARITY-PLAN.md](docs/PARITY-PLAN.md) for the roadmap and the research behind it.
 
 ## Note on Package Naming
 

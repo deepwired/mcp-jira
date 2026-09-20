@@ -1,7 +1,7 @@
 {
   "name": "mcp-jira-scoped",
   "version": "2.0.0",
-  "description": "MCP server for Atlassian Jira built on scoped API tokens — server-side scope enforcement, configurable toolsets, project allowlisting, and Markdown/ADF fidelity",
+  "description": "MCP server for Atlassian Jira built on scoped API tokens \u2014 server-side scope enforcement, configurable toolsets, project allowlisting, and Markdown/ADF fidelity",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -15,7 +15,8 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "prepublishOnly": "npm run build && npm run check:release && npm test",
-    "check:release": "node scripts/check-release.mjs"
+    "check:release": "node scripts/check-release.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "keywords": [
     "mcp",
