@@ -74,39 +74,34 @@ function parseInline(line: string): AdfNode[] {
 
   walkEmphasis(withLinks, [], tokens);
 
+  // Expand code placeholders under a set of marks. Link labels go through this
+  // too — a label like `Gemfile:184` is a code span *and* a link, and expanding
+  // only at the top level left the raw placeholder as the visible text.
+  const expandCode = (text: string, marks: AdfMark[]): AdfNode[] => {
+    const out: AdfNode[] = [];
+    for (const part of text.split(/(\uE000CODE\d+\uE000)/)) {
+      if (!part) continue;
+      const m = /^\uE000CODE(\d+)\uE000$/.exec(part);
+      if (m) {
+        out.push({ type: 'text', text: codeSpans[Number(m[1])], marks: [...marks, { type: 'code' }] });
+      } else {
+        out.push(marks.length > 0 ? { type: 'text', text: part, marks } : { type: 'text', text: part });
+      }
+    }
+    return out;
+  };
+
   const nodes: AdfNode[] = [];
   for (const token of tokens) {
-    // Re-expand placeholders, emitting a separate node per shielded run.
-    const parts = token.text.split(/(\uE000(?:CODE|LINK)\d+\uE000)/);
-    for (const part of parts) {
+    for (const part of token.text.split(/(\uE000LINK\d+\uE000)/)) {
       if (!part) continue;
-
-      const codeMatch = /^\uE000CODE(\d+)\uE000$/.exec(part);
-      if (codeMatch) {
-        nodes.push({
-          type: 'text',
-          text: codeSpans[Number(codeMatch[1])],
-          marks: [...token.marks, { type: 'code' }],
-        });
-        continue;
-      }
-
       const linkMatch = /^\uE000LINK(\d+)\uE000$/.exec(part);
       if (linkMatch) {
         const { label, href } = links[Number(linkMatch[1])];
-        nodes.push({
-          type: 'text',
-          text: label,
-          marks: [...token.marks, { type: 'link', attrs: { href } }],
-        });
-        continue;
+        nodes.push(...expandCode(label, [...token.marks, { type: 'link', attrs: { href } }]));
+      } else {
+        nodes.push(...expandCode(part, token.marks));
       }
-
-      nodes.push(
-        token.marks.length > 0
-          ? { type: 'text', text: part, marks: token.marks }
-          : { type: 'text', text: part },
-      );
     }
   }
 
@@ -159,6 +154,106 @@ function listItemContent(line: string): AdfNode[] {
   return [{ type: 'paragraph', content: parseInline(line) }];
 }
 
+const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+const TASK_ITEM_RE = /^\s*[-*+]\s+\[[ xX]\]\s+/;
+
+/** True if the line opens a block that must not be swallowed into a paragraph. */
+function startsBlock(line: string): boolean {
+  return (
+    /^\s*`{3,}/.test(line) ||
+    /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line) ||
+    /^\s*#{1,6}\s+/.test(line) ||
+    /^\s*>\s?/.test(line) ||
+    LIST_ITEM_RE.test(line)
+  );
+}
+
+/**
+ * Jira authors routinely type "1." or "-" as literal text in a plain paragraph
+ * rather than using a real list. Emitted unescaped, Markdown would read those
+ * back as list items — and renumber them, turning "2." into "1." and changing
+ * what the text says. Escaping the marker keeps the paragraph a paragraph.
+ */
+// Only punctuation can carry a Markdown backslash escape, so an ordered marker
+// is escaped on its separator ("2\.") rather than on the digit ("\2." would
+// render the backslash literally).
+const ORDERED_START_RE = /^(\s*)(\d+)([.)])(\s|$)/;
+const SYMBOL_START_RE = /^(\s*)([-*+]|#{1,6}|>)(\s|$)/;
+const ESCAPED_ORDERED_RE = /^(\s*)(\d+)\\([.)])/;
+const ESCAPED_SYMBOL_RE = /^(\s*)\\([-*+]|#{1,6}|>)/;
+
+function escapeBlockStarts(text: string): string {
+  return text
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(ORDERED_START_RE, '$1$2\\$3$4')
+        .replace(SYMBOL_START_RE, '$1\\$2$3'),
+    )
+    .join('\n');
+}
+
+function unescapeBlockStart(line: string): string {
+  return line.replace(ESCAPED_ORDERED_RE, '$1$2$3').replace(ESCAPED_SYMBOL_RE, '$1$2');
+}
+
+/** One paragraph from consecutive lines, separated by hard breaks. */
+function paragraphFromLines(lines: string[]): AdfNode {
+  if (lines.length === 0) return { type: 'paragraph', content: [{ type: 'text', text: '' }] };
+  const content: AdfNode[] = [];
+  lines.forEach((line, idx) => {
+    if (idx > 0) content.push({ type: 'hardBreak' });
+    content.push(...parseInline(line));
+  });
+  return { type: 'paragraph', content };
+}
+
+/**
+ * Parse a list and any lists nested under it. Indentation decides nesting: an
+ * item indented further than the current level becomes a sublist attached to
+ * the preceding item, which is how the renderer emits it.
+ */
+function parseListBlock(lines: string[], start: number): [AdfNode, number] {
+  const first = LIST_ITEM_RE.exec(lines[start])!;
+  const baseIndent = first[1].length;
+  const ordered = /\d/.test(first[2]);
+  const items: AdfNode[] = [];
+  let i = start;
+
+  while (i < lines.length) {
+    const m = LIST_ITEM_RE.exec(lines[i]);
+    if (!m) break;
+
+    const indent = m[1].length;
+    if (indent < baseIndent) break;
+
+    if (indent > baseIndent) {
+      const [nested, next] = parseListBlock(lines, i);
+      if (items.length > 0) {
+        items[items.length - 1].content!.push(nested);
+      } else {
+        items.push({ type: 'listItem', content: [nested] });
+      }
+      i = next;
+      continue;
+    }
+
+    // Same level: a change of list type starts a new list.
+    if (/\d/.test(m[2]) !== ordered) break;
+    // A task item at this level belongs to a taskList, not here.
+    if (TASK_ITEM_RE.test(lines[i])) break;
+
+    items.push({ type: 'listItem', content: listItemContent(m[3]) });
+    i++;
+  }
+
+  const startNum = ordered ? parseInt(first[2], 10) : 1;
+  const list: AdfNode = ordered
+    ? { type: 'orderedList', attrs: { order: startNum }, content: items }
+    : { type: 'bulletList', content: items };
+  return [list, i];
+}
+
 function isTableDivider(line: string): boolean {
   return /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/.test(line) && line.includes('-');
 }
@@ -185,12 +280,14 @@ export function markdownToAdf(markdown: string): AdfDoc {
     }
 
     // Fenced code block
-    const fence = /^\s*```(\w+)?\s*$/.exec(line);
+    const fence = /^\s*(`{3,})(.*)$/.exec(line);
     if (fence) {
-      const language = fence[1];
+      const width = fence[1].length;
+      const closeRe = new RegExp('^\\s*`{' + width + ',}\\s*$');
+      const language = fence[2].trim().split(/\s+/)[0] || undefined;
       const body: string[] = [];
       i++;
-      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+      while (i < lines.length && !closeRe.test(lines[i])) {
         body.push(lines[i]);
         i++;
       }
@@ -278,36 +375,31 @@ export function markdownToAdf(markdown: string): AdfDoc {
       continue;
     }
 
-    // Bullet list
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items: AdfNode[] = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i]) && !/^\s*[-*+]\s+\[[ xX]\]/.test(lines[i])) {
-        items.push({
-          type: 'listItem',
-          content: listItemContent(lines[i].replace(/^\s*[-*+]\s+/, '')),
-        });
-        i++;
-      }
-      content.push({ type: 'bulletList', content: items });
+    // Bullet or ordered list, including nesting by indentation
+    if (LIST_ITEM_RE.test(line)) {
+      const [list, next] = parseListBlock(lines, i);
+      content.push(list);
+      i = next;
       continue;
     }
 
-    // Ordered list
-    if (/^\s*\d+[.)]\s+/.test(line)) {
-      const items: AdfNode[] = [];
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        items.push({
-          type: 'listItem',
-          content: listItemContent(lines[i].replace(/^\s*\d+[.)]\s+/, '')),
-        });
-        i++;
-      }
-      content.push({ type: 'orderedList', attrs: { order: 1 }, content: items });
-      continue;
+    // Paragraph. Consecutive plain lines belong to ONE paragraph, joined by
+    // hard breaks — that is Markdown's rule, and treating each line as its own
+    // paragraph made round-trips unstable (a quoted multi-line paragraph grew
+    // a blank quote line on every pass).
+    const para: string[] = [];
+    while (i < lines.length && lines[i].trim() !== '' && !startsBlock(lines[i])) {
+      para.push(unescapeBlockStart(lines[i]));
+      i++;
     }
-
-    content.push(paragraph(line));
-    i++;
+    if (para.length === 0) {
+      // startsBlock() said this opens a block but no handler above consumed it.
+      // Treat it as literal text and advance: without this the loop cannot
+      // terminate, which is an out-of-memory crash rather than a bad render.
+      para.push(unescapeBlockStart(lines[i]));
+      i++;
+    }
+    content.push(paragraphFromLines(para));
   }
 
   return { type: 'doc', version: 1, content: content.length > 0 ? content : [paragraph('')] };
@@ -350,7 +442,7 @@ function blockToMarkdown(node: AdfNode, depth = 0): string {
       return (node.content ?? []).map((c) => blockToMarkdown(c, depth)).join('\n\n');
 
     case 'paragraph':
-      return inlineToMarkdown(node.content);
+      return escapeBlockStarts(inlineToMarkdown(node.content));
 
     case 'heading': {
       const level = Number(node.attrs?.level ?? 1);
@@ -360,7 +452,11 @@ function blockToMarkdown(node: AdfNode, depth = 0): string {
     case 'codeBlock': {
       const lang = (node.attrs?.language as string) ?? '';
       const body = (node.content ?? []).map((c) => c.text ?? '').join('');
-      return `\`\`\`${lang}\n${body}\n\`\`\``;
+      // A body containing its own ``` line would close the fence early and
+      // truncate the block, so widen the fence past the longest run inside.
+      const longest = Math.max(0, ...[...body.matchAll(/`+/g)].map((m) => m[0].length));
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      return `${fence}${lang}\n${body}\n${fence}`;
     }
 
     case 'rule':
@@ -379,10 +475,12 @@ function blockToMarkdown(node: AdfNode, depth = 0): string {
         .map((item) => renderListItem(item, depth, '-'))
         .join('\n');
 
-    case 'orderedList':
+    case 'orderedList': {
+      const start = Number(node.attrs?.order ?? 1) || 1;
       return (node.content ?? [])
-        .map((item, idx) => renderListItem(item, depth, `${idx + 1}.`))
+        .map((item, idx) => renderListItem(item, depth, `${start + idx}.`))
         .join('\n');
+    }
 
     case 'taskList':
       return (node.content ?? [])
@@ -426,13 +524,31 @@ function blockToMarkdown(node: AdfNode, depth = 0): string {
 
     case 'mediaSingle':
     case 'mediaGroup':
+      // Asterisk emphasis, matching what inlineToMarkdown emits, so the
+      // placeholder survives a round trip unchanged.
       return (node.content ?? [])
-        .map((m) => `_[attachment: ${(m.attrs?.id as string) ?? 'unknown'}]_`)
+        .map((m) => `*[attachment: ${(m.attrs?.id as string) ?? 'unknown'}]*`)
         .join(' ');
 
+    // Smart links. The URL lives in attrs with no content, so the default
+    // branch would return an empty string and silently drop the link.
+    case 'blockCard':
+    case 'embedCard':
+      return (node.attrs?.url as string) ?? '';
+
+    case 'expand':
+    case 'nestedExpand': {
+      const title = (node.attrs?.title as string) ?? 'Details';
+      const inner = (node.content ?? []).map((c) => blockToMarkdown(c, depth)).join('\n\n');
+      return `**${title}**\n\n${inner}`;
+    }
+
     default:
-      // Unknown block: keep the text rather than silently dropping content.
-      return node.content ? inlineToMarkdown(node.content) : (node.text ?? '');
+      // Unknown block: keep whatever text it carries rather than dropping it.
+      if (node.content) return inlineToMarkdown(node.content);
+      if (node.text) return node.text;
+      // No content and no text — surface any URL rather than returning nothing.
+      return (node.attrs?.url as string) ?? '';
   }
 }
 

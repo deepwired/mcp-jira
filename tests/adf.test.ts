@@ -242,3 +242,96 @@ describe('real-world fixture (TRAP-5466 structure)', () => {
     expect(firstBodyRow.content).toHaveLength(3);
   });
 });
+
+describe('regressions found against live Jira data', () => {
+  it('does not hang on a fence line with trailing text', () => {
+    // startsBlock() accepted any ```-prefixed line but the fence handler
+    // required the line to end after the language, so nothing consumed it and
+    // markdownToAdf spun until the process ran out of memory.
+    const t0 = Date.now();
+    expect(() => markdownToAdf('```bash -x\nfoo\n```')).not.toThrow();
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it('keeps a nested ordered list nested, and keeps its numbering', () => {
+    const md = '1. outer\n  1. inner a\n  2. inner b\n2. outer two';
+    const doc = markdownToAdf(md);
+    expect(doc.content).toHaveLength(1);
+    const nested = doc.content[0].content![0].content!.find((n) => n.type === 'orderedList');
+    expect(nested).toBeDefined();
+    expect(nested!.content).toHaveLength(2);
+    expect(roundTrip(md)).toBe(md);
+  });
+
+  it('a paragraph that merely starts with a number stays a paragraph', () => {
+    // Real Jira descriptions often type "1." / "2." as literal text. Read back
+    // unescaped, Markdown turned them into list items and RENUMBERED them,
+    // silently changing "2." to "1.".
+    const doc = {
+      type: 'doc',
+      version: 1,
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '2. Second step' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '3. Third step' }] },
+      ],
+    };
+    const md = adfToMarkdown(doc);
+    expect(md).toContain('2\\.');
+    const back = markdownToAdf(md);
+    expect(back.content.every((n) => n.type === 'paragraph')).toBe(true);
+    expect(adfToMarkdown(back)).toBe(md);
+  });
+
+  it('preserves an ordered list that starts at a number other than 1', () => {
+    expect(roundTrip('3. three\n4. four')).toBe('3. three\n4. four');
+  });
+
+  it('keeps a smart-link URL that lives only in attrs', () => {
+    // blockCard carries its URL in attrs with no content, so the default
+    // branch returned '' and the link vanished entirely.
+    const doc = {
+      type: 'doc',
+      version: 1,
+      content: [{ type: 'blockCard', attrs: { url: 'https://example.com/thread/1' } }],
+    };
+    expect(adfToMarkdown(doc)).toContain('https://example.com/thread/1');
+  });
+
+  it('keeps the label of a link whose text is a code span', () => {
+    // [`Gemfile:184`](url) rendered as [CODE0](url) — the placeholder leaked
+    // and the real label was lost.
+    const md = 'see [`Gemfile:184`](https://example.com/f) here';
+    const doc = markdownToAdf(md);
+    const node = doc.content[0].content!.find((n) => n.marks?.some((m) => m.type === 'link'));
+    expect(node!.text).toBe('Gemfile:184');
+    expect(node!.marks!.map((m) => m.type).sort()).toEqual(['code', 'link']);
+    expect(adfToMarkdown(doc)).toBe(md);
+  });
+
+  it('widens the fence when the code body contains backticks', () => {
+    const doc = {
+      type: 'doc',
+      version: 1,
+      content: [
+        { type: 'codeBlock', content: [{ type: 'text', text: 'a\n```\nb' }] },
+      ],
+    };
+    const md = adfToMarkdown(doc);
+    expect(md.startsWith('````')).toBe(true);
+    // and it survives the trip back without truncating at the inner fence
+    const back = markdownToAdf(md);
+    expect(back.content[0].content![0].text).toBe('a\n```\nb');
+  });
+
+  it('folds consecutive plain lines into one paragraph with hard breaks', () => {
+    const doc = markdownToAdf('line one\nline two');
+    expect(doc.content).toHaveLength(1);
+    expect(doc.content[0].content!.some((n) => n.type === 'hardBreak')).toBe(true);
+  });
+
+  it('a multi-line quoted paragraph does not grow a blank quote line each pass', () => {
+    const md = '> first line\n> second line';
+    expect(roundTrip(md)).toBe(md);
+    expect(roundTrip(roundTrip(md))).toBe(md);
+  });
+});
