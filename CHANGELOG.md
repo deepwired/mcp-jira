@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] — unreleased
+## [2.0.0] — 2026-09-20
 
 Tool count goes from 20 to 44 (34 registered by default), and four shipped
 bugs are fixed. Read the breaking changes before upgrading.
