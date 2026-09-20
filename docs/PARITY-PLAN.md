@@ -111,18 +111,61 @@ After this we are at or ahead of Rovo on Jira Cloud platform, minus the two prop
 
 ---
 
-## Phase 4 — Past parity
+## Phase 4 — Past parity, re-scoped by demand evidence
 
-**Agile is a GO.** See the research doc — the community claim that scoped tokens can't reach `/rest/agile/1.0` is backwards; Jira Software has *only* granular scopes.
+Revised after the competitive/demand research ([`research/competitive-landscape.md`](research/competitive-landscape.md)). The original Phase 4 list was built on what the REST API *offers*, not on what anyone *asks for*. Surveying 754 issues across the two leading servers changed three items.
 
-| Area | Notes |
+### Cut
+
+| Area | Why |
 |---|---|
-| Boards & sprints | `GET /rest/agile/1.0/board` needs `read:board-scope:jira-software` **and** `read:project:jira`. **Build issue listing against `/rest/software/1.0/`** — the `/rest/agile/1.0/` backlog, board-issue, sprint-issue and epic-issue routes are all deprecated |
-| Watchers | `DELETE` uses `write:issue.watcher:jira` (there is no `delete:` variant) |
-| Versions & components | Creates/updates need **`manage:jira-project`**, a tier above `write:jira-work`. `GET /rest/api/3/version` **does not exist** — use `/project/{key}/version` |
-| Saved filters | `GET /rest/api/3/filter` **was removed** — use `/filter/search` and `/filter/my` |
-| Attachment download | Completes the attachment set |
-| Bulk ops | `bulk/issues/delete` wants `write:issue:jira` (**not** `delete:`); `bulk/issues/watch` wants `write:issue:jira` (**not** `write:issue.watcher:jira`). The `INACCESSIBLE` banner in the docs is Connect-specific and does not apply to us |
+| **Watchers** | **The weakest signal in the entire survey** — 3 issues, **0 reactions total** across 754. sooperset shipped it and nobody reacted. Cost without demand |
+| **Bulk operations** | **Exactly one issue, 0 reactions**, open since 2025-06 with the author saying *"might do it myself if I find time."* Atlassian's official v2 has no bulk tools either |
+| Dashboards, webhooks, project admin, group management | **No evidence found** in 754 issues. Explicitly out of scope in sooperset's own gap analysis |
+
+### Build
+
+| Area | Demand | Notes |
+|---|---|---|
+| **Boards & sprints** | Moderate; demand sits **off**-GitHub (a 1,389-view community thread, never answered). Atlassian shipped 6 tools in v2 | `GET /rest/agile/1.0/board` needs `read:board-scope:jira-software` **and** `read:project:jira`. **Build issue listing against `/rest/software/1.0/`** — the agile backlog/board-issue/sprint-issue/epic-issue routes are deprecated |
+| **Versions** | Moderate — [atlassian#66](https://github.com/atlassian/atlassian-mcp-server/issues/66) 6r/9c is the most-discussed version request found anywhere | Creates/updates need **`manage:jira-project`**. `GET /rest/api/3/version` **does not exist** — use `/project/{key}/version` |
+| **Components** | Moderate-weak, but cheap alongside versions | |
+| **Saved filters** | Weak demand, but a clean unmet gap both leaders have | `GET /rest/api/3/filter` **was removed** — use `/filter/search` and `/filter/my` |
+| **Attachment download** | Completes our strongest area (see below) | |
+
+### Add — not in the original plan, higher demand than things that were
+
+| Area | Demand |
+|---|---|
+| **Labels** | [atlassian#83](https://github.com/atlassian/atlassian-mcp-server/issues/83) **19r/4c OPEN** — outranks sprints, worklogs, watchers, versions, components, filters and bulk ops individually |
+| **`JIRA_PROJECTS` scoping** | [atlassian#79](https://github.com/atlassian/atlassian-mcp-server/issues/79) **29r/25c OPEN** — the single loudest unmet request found, unaddressed by *both* leaders, and architecturally identical to the scope-derived schema work in Phase 2. **This is the highest-leverage item on the whole plan** |
+
+### Market, don't build
+
+**Attachments are the #1 requested capability** — 25+ distinct issues, one with 40 reactions. sooperset has download only, **no upload**. We already ship add/list/delete. We are ahead of both leaders on the most-wanted capability in the category and the README doesn't mention it.
+
+### Deferred
+
+- **JSM** — strong demand (#4) and reachable with scoped tokens, but it's a product expansion with its own scope family. Own decision, own release.
+- **Jira Assets / CMDB** — [atlassian#144](https://github.com/atlassian/atlassian-mcp-server/issues/144) 15r/4c. Real demand, large surface.
+
+---
+
+## Tool budget
+
+| | Count |
+|---|--:|
+| Today | 20 |
+| + Phase 3 (parity fill) | ~30 |
+| + Phase 4 as originally scoped | ~52 |
+| + Phase 4 re-scoped, with read/write pairing | **~42** |
+
+~42 is past the documented 30–50 accuracy knee, so **gating is required regardless of consolidation**. Two mechanisms, both additive:
+
+1. **Risk-tier pairing** instead of granular CRUD tools: `jira_worklog_read` / `jira_worklog_write` rather than four separate worklog tools. Roughly 12 tools saved.
+2. **`JIRA_TOOLSETS` gating** with the default set to *today's surface plus Phases 0–3*, and all of Phase 4 opt-in.
+
+**The default must never narrow.** sooperset shipped a 6-core default and reverted it to `all` the same day to avoid breaking upgrades — and two minor versions later still hasn't switched back. Gating gets introduced additively or not at all.
 
 ---
 
@@ -144,6 +187,12 @@ After this we are at or ahead of Rovo on Jira Cloud platform, minus the two prop
 | D4 | **Explicit `JIRA_SCOPES` config stays** | Scopes cannot be read back from a token or edited. Auto-detection is impossible |
 | D5 | **Prefer granular scopes in docs** | Guaranteed present in the picker; classic scopes have a documented gap history (Atlassian ID-9094) |
 | D6 | **Build against `/rest/software/1.0/`** for agile issue listing | The `/rest/agile/1.0/` equivalents are deprecated |
+| D7 | **Cut watchers and bulk ops** | Watchers: 3 issues / 0 reactions across 754 surveyed — the weakest signal found. Bulk: exactly one issue, 0 reactions. Neither earns its maintenance |
+| D8 | **Add labels and `JIRA_PROJECTS` scoping** | Both outrank most of the original Phase 4 on reaction count. `JIRA_PROJECTS` (29r) is the loudest unmet request in the category and plays directly to our positioning |
+| D9 | **Risk-tier pairing, not action dispatch** | GitHub consolidated to `method`-dispatched tools, won ~50% tokens, then hit *"impossible to selectively enable individual operations — you either get all of `issue_write` or none of it"* and decomposed it back into 11 tools maintained as a parallel surface. Scope enforcement **is our product**; a bare `action` param would weaken the core claim. `jira_x_read` / `jira_x_write` keeps gating trivially correct with no dynamic-schema drift risk, at a cost of ~5 extra tools |
+| D10 | **Gating is additive; the default never narrows** | sooperset shipped a narrowed default and reverted it the same day as a breaking change; still unreverted two minor versions later |
+| D11 | **Ship a deprecated-alias map before any renaming** | GitHub's 27-entry silent-resolution map is what makes consolidation non-breaking. Cheap now, impossible to retrofit |
+| D12 | **Market attachments** | The #1 requested capability in the category (25+ issues, one at 40r). sooperset has download only, no upload. We ship add/list/delete and don't mention it |
 
 ---
 
@@ -156,7 +205,16 @@ After this we are at or ahead of Rovo on Jira Cloud platform, minus the two prop
    ```
 2. **POST behaviour on granular scopes** — one third-party report claims granular tokens 401 on all POSTs. Likely a client-side artifact and contradicted by later evidence, but worth 15 minutes against a scratch project before release.
 3. **ADF converter: dependency or hand-rolled?** (Phase 1)
-4. **Default toolset membership** — judgment call, no data behind it. Target ~20–25 tools covering read + core issue write.
+4. **Default toolset membership** — settled by D10: the default is today's 20 tools plus everything Phases 0–3 add. Phase 4 is opt-in.
+
+## Cheap wins to fold in
+
+Identified during research, all low-cost and independent of the phases:
+
+- **Deterministic tool ordering.** MCP spec `2026-07-28`: *"Deterministic ordering enables clients to reliably cache the tool list and improves LLM prompt cache hit rates."*
+- **Per-toolset server instructions** (GitHub's pattern) — each enabled toolset contributes prose to the `instructions` field. Directly mitigates the discoverability loss from gating.
+- **README corrections** — tool count 14 → 20; soften the exclusivity claim; surface attachment support prominently (D12).
+- **Response budgeting.** [atlassian#17](https://github.com/atlassian/atlassian-mcp-server/issues/17) — *"MCP tool responses too verbose — breaks context window"* — 23 reactions. Worth auditing our formatters against.
 
 ---
 
