@@ -4,7 +4,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { loadConfig } from './auth.js';
-import { enforceScope, getAvailableTools } from './scopes.js';
+import { enforceScope, getAvailableTools, TOOL_SPECS, unreachableToolsets } from './scopes.js';
+import { DEFAULT_TOOLSETS, TOOLSETS, Toolset } from './scope-catalog.js';
 import { JiraClient } from './client.js';
 import { JiraConfig, ToolResult } from './types.js';
 import { createIssueTools } from './tools/issues.js';
@@ -32,9 +33,50 @@ interface ToolEntry {
   handler: (args: Record<string, unknown>) => Promise<ToolResult>;
 }
 
+/**
+ * Tell the model what exists but isn't loaded. Gating improves tool selection
+ * but makes disabled capabilities invisible, so the instructions field names
+ * them and says how to turn them on.
+ */
+export function buildInstructions(enabled: Toolset[], granted: string[]): string {
+  const lines = [
+    'Jira Cloud via scoped API tokens. Scopes are enforced by this server before any API call.',
+    '',
+    `Enabled toolsets: ${enabled.join(', ')}.`,
+  ];
+
+  const disabled = (Object.keys(TOOLSETS) as Toolset[]).filter((t) => !enabled.includes(t));
+  if (disabled.length > 0) {
+    lines.push(
+      '',
+      'Not loaded (set JIRA_TOOLSETS to enable, or "all"):',
+      ...disabled.map((t) => `  - ${t}: ${TOOLSETS[t].description}`),
+    );
+  }
+
+  const blocked = unreachableToolsets(granted).filter((t) => enabled.includes(t));
+  if (blocked.length > 0) {
+    lines.push(
+      '',
+      `Enabled but partly unreachable with the current scopes: ${blocked.join(', ')}. ` +
+        'Some tools in these toolsets are hidden because JIRA_SCOPES does not grant what they need.',
+    );
+  }
+
+  lines.push(
+    '',
+    'Notes: jira_search paginates with an opaque nextPageToken, not a numeric offset. ' +
+      'Content tools accept and return Markdown by default; pass format: "adf" for raw ADF. ' +
+      'On update, omitting a field leaves it untouched while passing null clears it.',
+  );
+
+  return lines.join('\n');
+}
+
 export function createServer(config: JiraConfig) {
   const client = new JiraClient(config);
-  const availableToolNames = getAvailableTools(config.scopes);
+  const toolsets = config.toolsets ?? DEFAULT_TOOLSETS;
+  const availableToolNames = getAvailableTools(config.scopes, toolsets);
 
   const allTools: Record<string, ToolEntry> = {
     ...createIssueTools(client),
@@ -47,11 +89,14 @@ export function createServer(config: JiraConfig) {
     ...createFieldTools(client),
   };
 
-  const server = new McpServer({
-    name: 'mcp-jira-scoped',
-    version: SERVER_VERSION,
-    description: 'MCP server for Atlassian Jira with scoped API tokens',
-  });
+  const server = new McpServer(
+    {
+      name: 'mcp-jira-scoped',
+      version: SERVER_VERSION,
+      description: 'MCP server for Atlassian Jira with scoped API tokens',
+    },
+    { instructions: buildInstructions(toolsets, config.scopes) },
+  );
 
   // Deterministic ordering lets clients cache the tool list and improves
   // prompt-cache hit rates (MCP spec 2026-07-28).
@@ -84,6 +129,11 @@ export function createServer(config: JiraConfig) {
   return server;
 }
 
+/** Guards against a tool being implemented but never given a scope spec. */
+export function unspecifiedTools(toolNames: string[]): string[] {
+  return toolNames.filter((n) => !(n in TOOL_SPECS));
+}
+
 async function main() {
   const config = await loadConfig();
   const server = createServer(config);
@@ -91,7 +141,10 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch((err) => {
-  console.error('Fatal:', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Only auto-start when run as a binary, not when imported by tests.
+if (process.env.NODE_ENV !== 'test') {
+  main().catch((err) => {
+    console.error('Fatal:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
