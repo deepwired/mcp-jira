@@ -195,26 +195,27 @@ describe('round-trip fidelity', () => {
   });
 });
 
-describe('real-world fixture (TRAP-5466 structure)', () => {
-  // Trimmed from a genuine BrowserStack Jira description: the exact combination
-  // of block types that the previous flatten-everything converter destroyed.
+describe('real-world structure fixture', () => {
+  // The block combination that the previous flatten-everything converter
+  // destroyed, taken from the shape of a real Jira description rather than its
+  // content: lead paragraph, callout quote, headings, a table, and a checklist.
   const REAL = [
-    '**Population A of TRAP-5448.** Ship first — cheapest, largest measured footprint.',
+    '**Depends on PROJ-100.** Ship first — cheapest change, largest measured effect.',
     '',
-    '> **UNBLOCKED 2026-09-18.** A deep re-scan has enumerated it: 74 methods.',
+    '> **UNBLOCKED 2026-09-18.** A second pass enumerated the call sites: 74 methods.',
     '',
     '## Definition',
     '',
-    'ES searches resolving against a `test_runs*` wildcard. Fix is `ESIndexUtil.getESIndexBetweenDates(Date, Date)`.',
+    'Queries resolving against a `records-*` wildcard. Fix is `IndexUtil.betweenDates(Date, Date)`.',
     '',
-    '| Repo | Method | Fit |',
+    '| Component | Entry point | Fit |',
     '| --- | --- | --- |',
-    '| api | `TestingTrendsService` | As-is |',
-    '| pipeline | `WeeklySummaryService` | Perfect fit |',
+    '| api | `ReportService` | as-is |',
+    '| worker | `DigestService` | direct |',
     '',
     '## Acceptance criteria',
     '',
-    '- [ ] Every listed member resolves via `getESIndexBetweenDates`.',
+    '- [ ] Every listed member resolves via `betweenDates`.',
     '- [x] All four wildcard surfaces are covered.',
   ].join('\n');
 

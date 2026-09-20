@@ -69,7 +69,7 @@ Consistent across every source reviewed, and it resolves most of what users woul
 
 Today `plainTextToAdf` emits only paragraphs plus links, and `extractTextFromAdf` flattens everything else. Headings, lists, code blocks, tables, panels, and blockquotes are destroyed in both directions. Reading a formatted description and writing it back is lossy.
 
-**Verified against real data.** `TRAP-5466` on the BrowserStack instance has H2 headings, a blockquote, a 14-row markdown table, task-list checkboxes, inline code spans, and nested bold/italic. Under the current converter the table collapses into undelimited cell text and the headings, blockquote, and checkboxes vanish entirely. That issue is our reference fixture, and Rovo's own markdown rendering of it is the expected output to diff against.
+**Verified against real data.** A production issue description carrying H2 headings, a blockquote, a 14-row markdown table, task-list checkboxes, inline code spans and nested bold/italic was used as the reference. Under the current converter the table collapses into undelimited cell text and the headings, blockquote and checkboxes vanish entirely.
 
 Work:
 - New `src/adf.ts` with a real bidirectional converter: headings, bold/italic/strike/code, bullet + ordered lists, task lists, code blocks, tables, blockquotes, panels, links, mentions, horizontal rules.

@@ -37,11 +37,11 @@ describe('jira_list_boards', () => {
       total: 1,
       isLast: true,
       values: [
-        { id: 42, name: 'TRAP Scrum', type: 'scrum', location: { projectKey: 'TRAP' } },
+        { id: 42, name: 'Platform Scrum', type: 'scrum', location: { projectKey: 'PROJ' } },
       ],
     });
     const res = await tools().jira_list_boards.handler({});
-    expect(res.content[0].text).toContain('TRAP Scrum');
+    expect(res.content[0].text).toContain('Platform Scrum');
     expect(res.content[0].text).toContain('id: 42');
   });
 
@@ -56,8 +56,8 @@ describe('jira_list_boards', () => {
 
   it('passes a project filter through', async () => {
     const fetchMock = mockJson({ values: [], isLast: true, total: 0 });
-    await tools().jira_list_boards.handler({ projectKeyOrId: 'TRAP' });
-    expect(fetchMock.mock.calls[0][0]).toContain('projectKeyOrId=TRAP');
+    await tools().jira_list_boards.handler({ projectKeyOrId: 'PROJ' });
+    expect(fetchMock.mock.calls[0][0]).toContain('projectKeyOrId=PROJ');
   });
 });
 
@@ -113,7 +113,7 @@ describe('jira_get_sprint_issues', () => {
       total: 1,
       issues: [
         {
-          key: 'TRAP-1',
+          key: 'PROJ-1',
           id: '1',
           fields: {
             summary: 'Do the thing',
@@ -124,7 +124,7 @@ describe('jira_get_sprint_issues', () => {
       ],
     });
     const res = await tools().jira_get_sprint_issues.handler({ sprintId: 7 });
-    expect(res.content[0].text).toContain('TRAP-1');
+    expect(res.content[0].text).toContain('PROJ-1');
     expect(res.content[0].text).toContain('In Progress');
     expect(res.content[0].text).toContain('Alice');
   });
@@ -178,9 +178,9 @@ describe('jira_manage_sprint', () => {
     const res = await tools().jira_manage_sprint.handler({
       action: 'add_issues',
       sprintId: 7,
-      issueKeys: ['TRAP-1', 'TRAP-2'],
+      issueKeys: ['PROJ-1', 'PROJ-2'],
     });
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).issues).toEqual(['TRAP-1', 'TRAP-2']);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).issues).toEqual(['PROJ-1', 'PROJ-2']);
     expect(res.content[0].text).toContain('2 issue(s)');
   });
 

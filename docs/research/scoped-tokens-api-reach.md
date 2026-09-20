@@ -50,7 +50,7 @@ Verified structurally: **every one of the 78 `/rest/agile/1.0/*` and `/rest/soft
 ### Confirmed on a live tenant, 2026-09-20
 
 We settled this ourselves rather than relying on the record. A scoped API token
-was minted against `browserstack.atlassian.net` carrying **only** these four
+was minted against a production Jira Cloud site carrying **only** these four
 scopes — no classic scopes at all:
 
 ```
