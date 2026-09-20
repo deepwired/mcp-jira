@@ -183,3 +183,52 @@ describe('JiraClient', () => {
     expect(res.error).toContain('[REDACTED]');
   });
 });
+
+describe('JiraClient error decoder', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function respondWith(status: number) {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: () => Promise.resolve({}),
+      headers: new Headers(),
+    });
+  }
+
+  it('401 names both causes: missing scope and wrong cloudId', async () => {
+    respondWith(401);
+    const res = await new JiraClient(testConfig).get('/rest/api/3/issue/PROJ-1');
+    expect(res.error).toMatch(/scope/i);
+    expect(res.error).toMatch(/Cloud ID/i);
+  });
+
+  it('403 states the scope check passed, so users stop hunting scopes', async () => {
+    respondWith(403);
+    const res = await new JiraClient(testConfig).get('/rest/api/3/issue/PROJ-1');
+    expect(res.error).toMatch(/scope check passed/i);
+    expect(res.error).toMatch(/licence|permission/i);
+  });
+
+  it('404 points at the gateway base URL, the most common real cause', async () => {
+    respondWith(404);
+    const res = await new JiraClient(testConfig).get('/rest/api/3/issue/PROJ-1');
+    expect(res.error).toContain('api.atlassian.com/ex/jira');
+  });
+
+  it('sends a body on DELETE when one is supplied', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: () => Promise.resolve({}),
+      headers: new Headers({ 'content-length': '0' }),
+    });
+    global.fetch = fetchMock;
+
+    await new JiraClient(testConfig).delete('/rest/api/3/thing/1', { reason: 'cleanup' });
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ reason: 'cleanup' }));
+  });
+});

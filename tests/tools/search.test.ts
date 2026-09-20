@@ -74,7 +74,7 @@ describe('jira_search', () => {
     expect(result.content[0].text).toContain('No issues found');
   });
 
-  it('shows pagination hint when more results available', async () => {
+  it('surfaces nextPageToken so the next page is actually reachable', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -87,13 +87,104 @@ describe('jira_search', () => {
               fields: { summary: 'First', status: { name: 'Open' }, assignee: null },
             },
           ],
-          isLast: false,
+          nextPageToken: 'CAEaAggD',
         }),
       headers: new Headers(),
     });
 
     const tools = createSearchTools(new JiraClient(testConfig));
     const result = await tools.jira_search.handler({ jql: 'project = PROJ' });
-    expect(result.content[0].text).toContain('more results available');
+    expect(result.content[0].text).toContain('More results available');
+    expect(result.content[0].text).toContain('CAEaAggD');
+  });
+
+  it('never sends startAt — the endpoint ignores it, which silently broke paging', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ issues: [], isLast: true }),
+      headers: new Headers(),
+    });
+
+    const tools = createSearchTools(new JiraClient(testConfig));
+    await tools.jira_search.handler({ jql: 'project = PROJ' });
+
+    const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).not.toContain('startAt');
+  });
+
+  it('forwards a supplied nextPageToken to the API', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ issues: [], isLast: true }),
+      headers: new Headers(),
+    });
+
+    const tools = createSearchTools(new JiraClient(testConfig));
+    await tools.jira_search.handler({ jql: 'project = PROJ', nextPageToken: 'TOKEN123' });
+
+    const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain('nextPageToken=TOKEN123');
+  });
+
+  it('fetches an approximate count only when includeTotal is set', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            issues: [
+              {
+                key: 'PROJ-1',
+                id: '1',
+                fields: { summary: 'First', status: { name: 'Open' }, assignee: null },
+              },
+            ],
+          }),
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ count: 417 }),
+        headers: new Headers(),
+      });
+    global.fetch = fetchMock;
+
+    const tools = createSearchTools(new JiraClient(testConfig));
+    const result = await tools.jira_search.handler({
+      jql: 'project = PROJ',
+      includeTotal: true,
+    });
+
+    expect(fetchMock.mock.calls[1][0]).toContain('/rest/api/3/search/approximate-count');
+    expect(result.content[0].text).toContain('~417');
+  });
+
+  it('flags an empty page that contradicts a non-zero count', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ issues: [] }),
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ count: 12 }),
+        headers: new Headers(),
+      });
+
+    const tools = createSearchTools(new JiraClient(testConfig));
+    const result = await tools.jira_search.handler({
+      jql: 'project = PROJ',
+      includeTotal: true,
+    });
+    expect(result.content[0].text).toMatch(/permissions or scope problem/);
   });
 });

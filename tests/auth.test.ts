@@ -90,8 +90,24 @@ describe('parseScopes', () => {
     ]);
   });
 
-  it('filters out invalid scopes', () => {
-    expect(parseScopes('read:jira-work,invalid,write:jira-work')).toEqual([
+  it('throws on unrecognised scopes rather than silently dropping them', () => {
+    // Silently filtering used to leave an empty scope list, which registers zero
+    // tools with no error — the server would start up completely inert.
+    expect(() => parseScopes('read:jira-work,invalid,write:jira-work')).toThrow(
+      /Unrecognised scope\(s\) in JIRA_SCOPES: invalid/,
+    );
+  });
+
+  it('throws when every requested scope is unrecognised', () => {
+    expect(() => parseScopes('bogus:one,bogus:two')).toThrow(/bogus:one, bogus:two/);
+  });
+
+  it('deduplicates repeated scopes', () => {
+    expect(parseScopes('read:jira-work,read:jira-work')).toEqual(['read:jira-work']);
+  });
+
+  it('tolerates whitespace and trailing commas', () => {
+    expect(parseScopes(' read:jira-work , write:jira-work ,')).toEqual([
       'read:jira-work',
       'write:jira-work',
     ]);

@@ -16,6 +16,9 @@ import { createLinkTools } from './tools/links.js';
 import { createAttachmentTools } from './tools/attachments.js';
 import { createFieldTools } from './tools/fields.js';
 
+/** Kept in step with package.json by `npm run check:version`. */
+export const SERVER_VERSION = '2.0.0';
+
 function errorResult(message: string) {
   return {
     content: [{ type: 'text' as const, text: message }],
@@ -46,11 +49,13 @@ export function createServer(config: JiraConfig) {
 
   const server = new McpServer({
     name: 'mcp-jira-scoped',
-    version: '1.0.0',
+    version: SERVER_VERSION,
     description: 'MCP server for Atlassian Jira with scoped API tokens',
   });
 
-  for (const [name, tool] of Object.entries(allTools)) {
+  // Deterministic ordering lets clients cache the tool list and improves
+  // prompt-cache hit rates (MCP spec 2026-07-28).
+  for (const [name, tool] of Object.entries(allTools).sort(([a], [b]) => a.localeCompare(b))) {
     if (!availableToolNames.includes(name)) continue;
 
     const shape = tool.inputSchema.shape;

@@ -5,9 +5,9 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org)
 
-**The only MCP server for Jira that works with Atlassian's scoped API tokens.**
+**A Jira MCP server built around Atlassian's scoped API tokens, with scope enforcement in the server itself.**
 
-Every other Jira MCP server uses classic (unscoped) API tokens with basic auth against `yoursite.atlassian.net`. Atlassian is deprecating those. This server uses scoped tokens with the modern `api.atlassian.com` gateway — the way Atlassian intends these tokens to be used.
+Most Jira MCP servers use classic (unscoped) API tokens with basic auth against `yoursite.atlassian.net` — including the most popular one, which [still has scoped-token support open as a feature request](https://github.com/sooperset/mcp-atlassian/issues/968). Atlassian is moving away from classic tokens. This server is built for scoped tokens against the modern `api.atlassian.com` gateway, and enforces your granted scopes server-side before any API call is made — the AI is never trusted to restrain itself.
 
 ## What You Can Do
 

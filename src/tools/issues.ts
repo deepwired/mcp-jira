@@ -36,14 +36,25 @@ const createIssueSchema = z.object({
 const updateIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required'),
   summary: z.string().optional(),
-  description: z.string().optional(),
-  assigneeAccountId: z.string().optional(),
-  priority: z.string().optional(),
-  labels: z.array(z.string()).optional(),
+  description: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Plain text description. Pass null to clear the field.'),
+  assigneeAccountId: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Account ID to assign to. Pass null to unassign.'),
+  priority: z.string().nullable().optional().describe('Priority name. Pass null to clear.'),
+  labels: z.array(z.string()).optional().describe('Replaces all labels. Pass [] to clear.'),
   customFields: z
     .record(z.unknown())
     .optional()
-    .describe('Custom fields as key-value pairs, e.g. {"customfield_10016": 2}'),
+    .describe(
+      'Custom fields as key-value pairs, e.g. {"customfield_10016": 2}. ' +
+        'Pass null as a value to clear that field.',
+    ),
 });
 
 const transitionIssueSchema = z.object({
@@ -203,14 +214,19 @@ export function createIssueTools(client: JiraClient) {
         const parsed = updateIssueSchema.parse(args);
         const fields: Record<string, unknown> = {};
 
+        // undefined = leave untouched; null = clear the field in Jira.
         if (parsed.summary !== undefined) fields.summary = parsed.summary;
         if (parsed.description !== undefined) {
-          fields.description = plainTextToAdf(parsed.description);
+          fields.description =
+            parsed.description === null ? null : plainTextToAdf(parsed.description);
         }
         if (parsed.assigneeAccountId !== undefined) {
-          fields.assignee = { accountId: parsed.assigneeAccountId };
+          fields.assignee =
+            parsed.assigneeAccountId === null ? null : { accountId: parsed.assigneeAccountId };
         }
-        if (parsed.priority !== undefined) fields.priority = { name: parsed.priority };
+        if (parsed.priority !== undefined) {
+          fields.priority = parsed.priority === null ? null : { name: parsed.priority };
+        }
         if (parsed.labels !== undefined) fields.labels = parsed.labels;
         if (parsed.customFields) {
           Object.assign(fields, parsed.customFields);

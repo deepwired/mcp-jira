@@ -1,4 +1,5 @@
 import { JiraConfig, Scope } from './types.js';
+import { KNOWN_SCOPES } from './scope-catalog.js';
 
 export function buildHeaders(email: string, token: string): Record<string, string> {
   const basic = Buffer.from(`${email}:${token}`).toString('base64');
@@ -62,19 +63,31 @@ export async function loadConfig(): Promise<JiraConfig> {
 }
 
 export function parseScopes(raw: string | undefined): Scope[] {
-  const VALID_SCOPES: Set<string> = new Set([
-    'read:jira-work',
-    'write:jira-work',
-    'read:jira-user',
-    'read:me',
-  ]);
-
   if (!raw || raw.trim() === '') {
     return ['read:jira-work'];
   }
 
-  return raw
+  const requested = raw
     .split(',')
     .map((s) => s.trim())
-    .filter((s) => VALID_SCOPES.has(s)) as Scope[];
+    .filter((s) => s !== '');
+
+  if (requested.length === 0) {
+    return ['read:jira-work'];
+  }
+
+  // Fail loudly. Silently dropping unrecognised scopes used to leave the server
+  // with an empty scope list, which registers zero tools with no error at all.
+  const unknown = requested.filter((s) => !KNOWN_SCOPES.has(s));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unrecognised scope(s) in JIRA_SCOPES: ${unknown.join(', ')}.\n` +
+        `Supported scopes: ${[...KNOWN_SCOPES].sort().join(', ')}.\n` +
+        'Check for typos. Note that scopes cannot be read back from an Atlassian token, ' +
+        'so this server cannot verify them against the token itself — JIRA_SCOPES must ' +
+        'match what you selected when the token was created.',
+    );
+  }
+
+  return [...new Set(requested)] as Scope[];
 }

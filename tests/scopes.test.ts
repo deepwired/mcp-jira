@@ -30,9 +30,10 @@ describe('Scope Enforcement', () => {
     expect(scopes).toEqual(['read:jira-work']);
   });
 
-  it('6. ignores unknown scopes without crashing', () => {
-    const scopes = parseScopes('read:jira-work,bogus:scope,write:jira-work');
-    expect(scopes).toEqual(['read:jira-work', 'write:jira-work']);
+  it('6. rejects unknown scopes loudly instead of degrading to an inert server', () => {
+    expect(() => parseScopes('read:jira-work,bogus:scope,write:jira-work')).toThrow(
+      /bogus:scope/,
+    );
   });
 
   it('7. blocks jira_delete_issue when confirm is not checked (scope-level)', () => {
