@@ -16,6 +16,8 @@ import { createUserTools } from './tools/users.js';
 import { createLinkTools } from './tools/links.js';
 import { createAttachmentTools } from './tools/attachments.js';
 import { createFieldTools } from './tools/fields.js';
+import { createWorklogTools } from './tools/worklogs.js';
+import { createMetaTools } from './tools/meta.js';
 
 /** Kept in step with package.json by `npm run check:version`. */
 export const SERVER_VERSION = '2.0.0';
@@ -87,6 +89,8 @@ export function createServer(config: JiraConfig) {
     ...createLinkTools(client),
     ...createAttachmentTools(client),
     ...createFieldTools(client),
+    ...createWorklogTools(client),
+    ...createMetaTools(client),
   };
 
   const server = new McpServer(

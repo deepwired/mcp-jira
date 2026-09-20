@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
@@ -15,6 +15,14 @@ const addAttachmentSchema = z.object({
     .string()
     .optional()
     .describe('MIME type override (e.g. "image/png"). Auto-detected from extension if omitted.'),
+});
+
+const downloadAttachmentSchema = z.object({
+  attachmentId: z.string().min(1, 'attachmentId is required'),
+  destPath: z
+    .string()
+    .min(1, 'destPath is required')
+    .describe('Absolute path to write the downloaded file to.'),
 });
 
 const deleteAttachmentSchema = z.object({
@@ -108,6 +116,32 @@ export function createAttachmentTools(client: JiraClient) {
         const uploaded = res.data ?? [];
         const names = uploaded.map((a) => `**${a.filename}** (id: ${a.id})`).join(', ');
         return textResult(`Attached ${names} to **${parsed.issueKey}** successfully.`);
+      },
+    },
+
+    jira_download_attachment: {
+      description:
+        'Download an attachment to a local file. Use jira_list_attachments to find attachment IDs. ' +
+        'Returns the path written and the number of bytes.',
+      inputSchema: downloadAttachmentSchema,
+      handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
+        const parsed = downloadAttachmentSchema.parse(args);
+        const res = await client.getBinary(
+          `/rest/api/3/attachment/content/${encodeURIComponent(parsed.attachmentId)}`,
+        );
+        if (!res.ok) return textResult(res.error!, true);
+
+        try {
+          await writeFile(parsed.destPath, res.data!.bytes);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return textResult(`Downloaded but failed to write "${parsed.destPath}": ${msg}`, true);
+        }
+
+        const kb = (res.data!.bytes.byteLength / 1024).toFixed(1);
+        return textResult(
+          `Attachment ${parsed.attachmentId} written to ${parsed.destPath} (${kb} KB, ${res.data!.contentType}).`,
+        );
       },
     },
 

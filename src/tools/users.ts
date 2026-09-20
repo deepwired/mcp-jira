@@ -6,6 +6,8 @@ const getUserSchema = z.object({
   accountId: z.string().min(1, 'accountId is required'),
 });
 
+const getMyselfSchema = z.object({});
+
 const searchUsersSchema = z.object({
   query: z.string().min(1, 'search query is required'),
   startAt: z.number().int().min(0).default(0),
@@ -29,6 +31,30 @@ function formatUser(u: JiraUser): string {
 
 export function createUserTools(client: JiraClient) {
   return {
+    jira_get_myself: {
+      description:
+        'Get the account this server is authenticated as. Use it to resolve "me"/"my" in requests, ' +
+        'and as the cheapest way to check the connection and credentials are working.',
+      inputSchema: getMyselfSchema,
+      handler: async (_args: Record<string, unknown>): Promise<ToolResult> => {
+        const res = await client.get<JiraUser & { timeZone?: string; locale?: string }>(
+          '/rest/api/3/myself',
+        );
+        if (!res.ok) return textResult(res.error!, true);
+        const u = res.data!;
+        return textResult(
+          [
+            formatUser(u),
+            u.timeZone ? `Time zone: ${u.timeZone}` : null,
+            '',
+            'Use this accountId for assignee fields and for JQL such as `assignee = currentUser()`.',
+          ]
+            .filter((l) => l !== null)
+            .join('\n'),
+        );
+      },
+    },
+
     jira_get_user: {
       description: 'Get Jira user info by account ID.',
       inputSchema: getUserSchema,

@@ -95,6 +95,17 @@ const getTransitionsSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
 });
 
+const assignIssueSchema = z.object({
+  issueKey: z.string().min(1, 'issueKey is required'),
+  accountId: z
+    .string()
+    .nullable()
+    .describe(
+      'Account ID to assign to. Pass null to unassign. ' +
+        'Use jira_search_users or jira_get_myself to resolve a name or email to an account ID.',
+    ),
+});
+
 const deleteIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required'),
   confirm: z.boolean().describe('Must be true to confirm deletion. Safety guard.'),
@@ -360,6 +371,26 @@ export function createIssueTools(client: JiraClient) {
         }
 
         return textResult(lines.join('\n'));
+      },
+    },
+
+    jira_assign_issue: {
+      description:
+        'Assign a Jira issue to a user, or unassign it by passing accountId: null. ' +
+        'A focused alternative to jira_update_issue when assignment is the only change.',
+      inputSchema: assignIssueSchema,
+      handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
+        const parsed = assignIssueSchema.parse(args);
+        const res = await client.put(
+          `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}/assignee`,
+          { accountId: parsed.accountId },
+        );
+        if (!res.ok) return textResult(res.error!, true);
+        return textResult(
+          parsed.accountId === null
+            ? `Issue **${parsed.issueKey}** unassigned.`
+            : `Issue **${parsed.issueKey}** assigned to ${parsed.accountId}.`,
+        );
       },
     },
 
