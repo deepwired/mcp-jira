@@ -449,3 +449,61 @@ describe('jira_update_issue field clearing', () => {
     expect(fields.customfield_10016).toBeNull();
   });
 });
+
+describe('cleared rich-text fields', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('an empty ADF document renders as no description at all', async () => {
+    // Jira returns {type:"doc",version:1,content:[]} for a cleared field, not
+    // null. An object is truthy, so a naive check printed an empty header.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          key: 'PROJ-1',
+          id: '1',
+          fields: {
+            summary: 'Cleared',
+            status: { name: 'Open' },
+            description: { type: 'doc', version: 1, content: [] },
+          },
+        }),
+      headers: new Headers(),
+    });
+
+    const tools = createIssueTools(makeClient());
+    const res = await tools.jira_get_issue.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).not.toContain('Description:');
+  });
+
+  it('still renders a description that has content', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          key: 'PROJ-1',
+          id: '1',
+          fields: {
+            summary: 'Has one',
+            status: { name: 'Open' },
+            description: {
+              type: 'doc',
+              version: 1,
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'real text' }] }],
+            },
+          },
+        }),
+      headers: new Headers(),
+    });
+
+    const tools = createIssueTools(makeClient());
+    const res = await tools.jira_get_issue.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).toContain('Description:');
+    expect(res.content[0].text).toContain('real text');
+  });
+});

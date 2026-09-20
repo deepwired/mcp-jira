@@ -156,8 +156,12 @@ function formatIssue(
     `Labels: ${Array.isArray(f.labels) && f.labels.length > 0 ? (f.labels as string[]).join(', ') : 'None'}`,
   ];
 
-  if (f.description) {
-    lines.push(`\nDescription:\n${fromAdf(f.description, format)}`);
+  // A cleared rich-text field comes back as an empty ADF document rather than
+  // null, and an object is always truthy — so check the rendered text instead,
+  // or every cleared description prints an empty "Description:" header.
+  const description = f.description ? fromAdf(f.description, format).trim() : '';
+  if (description !== '') {
+    lines.push(`\nDescription:\n${description}`);
   }
 
   if (includeCustomFields) {
