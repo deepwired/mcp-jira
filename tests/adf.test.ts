@@ -336,3 +336,31 @@ describe('regressions found against live Jira data', () => {
     expect(roundTrip(roundTrip(md))).toBe(md);
   });
 });
+
+describe('untrusted-input hardening', () => {
+  it('bounds blockquote recursion instead of overflowing the stack', () => {
+    // Jira content is untrusted input to this parser. Unbounded recursion on
+    // "> > > > ..." crashed with RangeError before the depth guard.
+    const deep = '> '.repeat(20000) + 'x';
+    let out = '';
+    expect(() => {
+      out = adfToMarkdown(markdownToAdf(deep));
+    }).not.toThrow();
+    expect(out).toContain('x');
+  });
+
+  it('still parses quotes nested to a realistic depth', () => {
+    const doc = markdownToAdf('> '.repeat(3) + 'deep');
+    expect(adfToMarkdown(doc)).toContain('deep');
+    expect(doc.content[0].type).toBe('blockquote');
+  });
+
+  it('handles adversarial delimiter spam without pathological backtracking', () => {
+    const cases = ['*'.repeat(6000), '`'.repeat(6000), '['.repeat(4000), '|'.repeat(6000)];
+    for (const input of cases) {
+      const t0 = Date.now();
+      expect(() => adfToMarkdown(markdownToAdf(input))).not.toThrow();
+      expect(Date.now() - t0).toBeLessThan(2000);
+    }
+  });
+});

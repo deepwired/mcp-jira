@@ -158,12 +158,12 @@ const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
 const TASK_ITEM_RE = /^\s*[-*+]\s+\[[ xX]\]\s+/;
 
 /** True if the line opens a block that must not be swallowed into a paragraph. */
-function startsBlock(line: string): boolean {
+function startsBlock(line: string, quotesParsed = true): boolean {
   return (
     /^\s*`{3,}/.test(line) ||
     /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line) ||
     /^\s*#{1,6}\s+/.test(line) ||
-    /^\s*>\s?/.test(line) ||
+    (quotesParsed && /^\s*>\s?/.test(line)) ||
     LIST_ITEM_RE.test(line)
   );
 }
@@ -266,7 +266,15 @@ function splitTableRow(line: string): string[] {
     .map((c) => c.trim());
 }
 
-export function markdownToAdf(markdown: string): AdfDoc {
+/**
+ * Blockquotes recurse, and Jira content is untrusted input as far as this
+ * parser is concerned. Without a bound, a pathologically nested quote
+ * ("> > > > ..." thousands deep) overflows the stack. Past this depth the
+ * remaining quote markers are kept as literal text instead.
+ */
+const MAX_BLOCK_DEPTH = 16;
+
+export function markdownToAdf(markdown: string, depth = 0): AdfDoc {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const content: AdfNode[] = [];
   let i = 0;
@@ -348,13 +356,13 @@ export function markdownToAdf(markdown: string): AdfDoc {
     }
 
     // Blockquote — consume the contiguous run
-    if (/^\s*>\s?/.test(line)) {
+    if (/^\s*>\s?/.test(line) && depth < MAX_BLOCK_DEPTH) {
       const body: string[] = [];
       while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
         body.push(lines[i].replace(/^\s*>\s?/, ''));
         i++;
       }
-      const inner = markdownToAdf(body.join('\n'));
+      const inner = markdownToAdf(body.join('\n'), depth + 1);
       content.push({ type: 'blockquote', content: inner.content });
       continue;
     }
@@ -388,7 +396,11 @@ export function markdownToAdf(markdown: string): AdfDoc {
     // paragraph made round-trips unstable (a quoted multi-line paragraph grew
     // a blank quote line on every pass).
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() !== '' && !startsBlock(lines[i])) {
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !startsBlock(lines[i], depth < MAX_BLOCK_DEPTH)
+    ) {
       para.push(unescapeBlockStart(lines[i]));
       i++;
     }

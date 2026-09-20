@@ -109,6 +109,26 @@ bugs are fixed. Read the breaking changes before upgrading.
   be the only Jira MCP server supporting scoped tokens, which is no longer
   true.
 
+### Security
+
+- **Credential redaction was incomplete.** `sanitizeError` stripped the raw
+  token but not the base64 `email:token` form that actually travels in the
+  `Authorization` header — a trivially reversible encoding. Both forms are now
+  redacted, plus any unrecognised `Basic <blob>` as a catch-all. No leak was
+  observed in practice; fetch errors do not normally echo headers. Found by
+  pre-release review, not by an incident.
+- **Unbounded recursion on untrusted content.** Deeply nested blockquotes
+  (`> > > > …`) overflowed the stack, since blockquote parsing recursed without
+  a depth bound and Jira content is untrusted input to the parser. Bounded at
+  16 levels; beyond that the markers are kept as literal text.
+- **Dependency vulnerabilities cleared.** Seven advisories (three high) reached
+  the tree through the MCP SDK's HTTP transport dependencies. None were
+  reachable — this server uses stdio only — but they surfaced in every
+  consumer's `npm audit`. Now zero.
+- The README documents the attachment tools' trust boundary: issue content is
+  attacker-controllable, which makes prompt injection a real exfiltration path
+  for any MCP server that can read local files.
+
 ### Verification
 
 Tested against a live Jira Cloud instance, not only offline mocks:
@@ -120,7 +140,12 @@ byte-identical round-trips, with the remainder being structural normalisation
 rather than content loss.
 
 Seven of the bugs above were found only by live testing; the offline suite
-passed all 249 assertions while they were present. 260 tests now pass.
+passed all 249 assertions while they were present. 269 tests now pass.
+
+Adversarial input testing covers delimiter spam, unclosed markup, pathological
+nesting and multi-hundred-kilobyte lines: worst case 45 ms, no catastrophic
+backtracking. The published tarball was installed into a clean directory and
+driven over MCP stdio to confirm the artifact works as shipped.
 
 The `agile` toolset was verified separately against a second token carrying
 only the four `jira-software` scopes: boards and sprints listed, and sprint

@@ -15,8 +15,26 @@ export function buildBaseUrl(cloudId: string): string {
   return `https://api.atlassian.com/ex/jira/${cloudId}`;
 }
 
-export function sanitizeError(message: string, token: string): string {
-  return message.replaceAll(token, '[REDACTED]');
+/**
+ * Strip credentials from anything on its way to the model or a log.
+ *
+ * The raw token is the obvious case, but the credential actually travels as
+ * base64("email:token") in the Authorization header, and base64 is not
+ * protection — anything echoing a request header would have leaked a
+ * reversible credential. Both forms are redacted, plus any bare `Basic <blob>`
+ * in case the email is not the one we hold.
+ */
+export function sanitizeError(message: string, token: string, email?: string): string {
+  let out = message;
+  if (token) {
+    out = out.replaceAll(token, '[REDACTED]');
+    out = out.replaceAll(Buffer.from(token).toString('base64'), '[REDACTED]');
+    if (email) {
+      out = out.replaceAll(Buffer.from(`${email}:${token}`).toString('base64'), '[REDACTED]');
+    }
+  }
+  // Catch-all for an Authorization value we did not construct ourselves.
+  return out.replace(/\bBasic\s+[A-Za-z0-9+/=]{16,}/g, 'Basic [REDACTED]');
 }
 
 export async function fetchCloudId(instance: string): Promise<string> {

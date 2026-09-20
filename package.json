@@ -1,7 +1,7 @@
 {
   "name": "mcp-jira-scoped",
   "version": "2.0.0",
-  "description": "MCP server for Atlassian Jira built on scoped API tokens \u2014 server-side scope enforcement, configurable toolsets, project allowlisting, and Markdown/ADF fidelity",
+  "description": "MCP server for Atlassian Jira built on scoped API tokens — server-side scope enforcement, configurable toolsets, project allowlisting, and Markdown/ADF fidelity",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -58,7 +58,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {

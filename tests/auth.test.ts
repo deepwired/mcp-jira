@@ -113,3 +113,41 @@ describe('parseScopes', () => {
     ]);
   });
 });
+
+describe('sanitizeError credential redaction', () => {
+  const TOKEN = 'not-a-real-token-0000000000000000';
+  const EMAIL = 'a@b.com';
+  const B64 = Buffer.from(`${EMAIL}:${TOKEN}`).toString('base64');
+
+  it('redacts the raw token', () => {
+    expect(sanitizeError(`boom ${TOKEN}`, TOKEN, EMAIL)).not.toContain(TOKEN);
+  });
+
+  it('redacts the base64 credential that actually travels in the header', () => {
+    // The token is sent as base64("email:token"). Redacting only the raw token
+    // left a trivially reversible credential in any message echoing a header.
+    const out = sanitizeError(`header Basic ${B64}`, TOKEN, EMAIL);
+    expect(out).not.toContain(B64);
+  });
+
+  it('redacts a base64 blob of the token alone', () => {
+    const tokenB64 = Buffer.from(TOKEN).toString('base64');
+    expect(sanitizeError(`value ${tokenB64}`, TOKEN, EMAIL)).not.toContain(tokenB64);
+  });
+
+  it('redacts an unfamiliar Basic header as a catch-all', () => {
+    const out = sanitizeError('Authorization: Basic c29tZU90aGVyQ3JlZGVudGlhbFZhbHVl', TOKEN, EMAIL);
+    expect(out).toContain('Basic [REDACTED]');
+    expect(out).not.toContain('c29tZU90aGVy');
+  });
+
+  it('leaves innocent text alone', () => {
+    expect(sanitizeError('Not found — check the identifier', TOKEN, EMAIL)).toBe(
+      'Not found — check the identifier',
+    );
+  });
+
+  it('works without an email, as the old two-arg signature did', () => {
+    expect(sanitizeError(`boom ${TOKEN}`, TOKEN)).not.toContain(TOKEN);
+  });
+});

@@ -44,11 +44,13 @@ export class JiraClient {
   private baseUrl: string;
   private headers: Record<string, string>;
   private token: string;
+  private email: string;
 
   constructor(config: JiraConfig) {
     this.baseUrl = buildBaseUrl(config.cloudId);
     this.headers = buildHeaders(config.userEmail, config.apiToken);
     this.token = config.apiToken;
+    this.email = config.userEmail;
   }
 
   private mapFetchError(err: unknown): ApiResponse {
@@ -58,7 +60,7 @@ export class JiraClient {
     if (err instanceof TypeError && err.message.includes('fetch')) {
       return { ok: false, status: 0, error: 'Network error — unable to reach Jira' };
     }
-    return { ok: false, status: 0, error: sanitizeError(String(err), this.token) };
+    return { ok: false, status: 0, error: sanitizeError(String(err), this.token, this.email) };
   }
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
@@ -97,7 +99,7 @@ export class JiraClient {
       return {
         ok: false,
         status: response.status,
-        error: sanitizeError(`Jira API error (${response.status}): ${messages}`, this.token),
+        error: sanitizeError(`Jira API error (${response.status}): ${messages}`, this.token, this.email),
       };
     }
 
