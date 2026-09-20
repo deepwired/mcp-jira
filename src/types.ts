@@ -14,6 +14,7 @@ export interface JiraConfig {
   userEmail: string;
   scopes: Scope[];
   toolsets?: Toolset[];
+  projects?: string[] | null;
 }
 
 export interface ApiResponse<T = unknown> {

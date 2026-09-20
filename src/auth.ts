@@ -1,5 +1,6 @@
 import { JiraConfig, Scope } from './types.js';
 import { KNOWN_SCOPES, parseToolsets } from './scope-catalog.js';
+import { parseProjects } from './project-scope.js';
 
 export function buildHeaders(email: string, token: string): Record<string, string> {
   const basic = Buffer.from(`${email}:${token}`).toString('base64');
@@ -59,8 +60,9 @@ export async function loadConfig(): Promise<JiraConfig> {
 
   const scopes = parseScopes(process.env.JIRA_SCOPES);
   const toolsets = parseToolsets(process.env.JIRA_TOOLSETS);
+  const projects = parseProjects(process.env.JIRA_PROJECTS);
 
-  return { instance, cloudId, apiToken, userEmail, scopes, toolsets };
+  return { instance, cloudId, apiToken, userEmail, scopes, toolsets, projects };
 }
 
 export function parseScopes(raw: string | undefined): Scope[] {

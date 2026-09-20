@@ -8,6 +8,7 @@ import { enforceScope, getAvailableTools, TOOL_SPECS, unreachableToolsets } from
 import { DEFAULT_TOOLSETS, TOOLSETS, Toolset } from './scope-catalog.js';
 import { JiraClient } from './client.js';
 import { JiraConfig, ToolResult } from './types.js';
+import { ProjectScope } from './project-scope.js';
 import { createIssueTools } from './tools/issues.js';
 import { createSearchTools } from './tools/search.js';
 import { createCommentTools } from './tools/comments.js';
@@ -18,6 +19,9 @@ import { createAttachmentTools } from './tools/attachments.js';
 import { createFieldTools } from './tools/fields.js';
 import { createWorklogTools } from './tools/worklogs.js';
 import { createMetaTools } from './tools/meta.js';
+import { createAgileTools } from './tools/agile.js';
+import { createVersionTools } from './tools/versions.js';
+import { createFilterTools } from './tools/filters.js';
 
 /** Kept in step with package.json by `npm run check:version`. */
 export const SERVER_VERSION = '2.0.0';
@@ -40,7 +44,11 @@ interface ToolEntry {
  * but makes disabled capabilities invisible, so the instructions field names
  * them and says how to turn them on.
  */
-export function buildInstructions(enabled: Toolset[], granted: string[]): string {
+export function buildInstructions(
+  enabled: Toolset[],
+  granted: string[],
+  projectScope?: ProjectScope,
+): string {
   const lines = [
     'Jira Cloud via scoped API tokens. Scopes are enforced by this server before any API call.',
     '',
@@ -65,6 +73,15 @@ export function buildInstructions(enabled: Toolset[], granted: string[]): string
     );
   }
 
+  if (projectScope?.isActive) {
+    lines.push(
+      '',
+      `Restricted to projects: ${projectScope.projects.join(', ')}. ` +
+        'Requests naming any other project are refused before the API is called, ' +
+        'and JQL searches are constrained to these projects automatically.',
+    );
+  }
+
   lines.push(
     '',
     'Notes: jira_search paginates with an opaque nextPageToken, not a numeric offset. ' +
@@ -75,8 +92,47 @@ export function buildInstructions(enabled: Toolset[], granted: string[]): string
   return lines.join('\n');
 }
 
+/**
+ * Apply the project allowlist to a tool's arguments before it runs. Doing it
+ * here rather than in each tool means a new tool cannot forget to enforce it:
+ * anything taking issueKey, projectKey or jql is covered automatically.
+ */
+export function applyProjectScope(
+  scope: ProjectScope,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!scope.isActive) return args;
+
+  const out = { ...args };
+
+  for (const key of ['issueKey', 'inwardIssueKey', 'outwardIssueKey']) {
+    const value = out[key];
+    if (typeof value === 'string' && value !== '') scope.assertIssueKey(value);
+  }
+
+  if (typeof out.projectKey === 'string' && out.projectKey !== '') {
+    scope.assertProject(out.projectKey);
+  }
+  if (typeof out.projectKeyOrId === 'string' && out.projectKeyOrId !== '') {
+    scope.assertProject(out.projectKeyOrId);
+  }
+
+  if (Array.isArray(out.issueKeys)) {
+    for (const k of out.issueKeys) {
+      if (typeof k === 'string') scope.assertIssueKey(k);
+    }
+  }
+
+  if (typeof out.jql === 'string') {
+    out.jql = scope.constrainJql(out.jql);
+  }
+
+  return out;
+}
+
 export function createServer(config: JiraConfig) {
   const client = new JiraClient(config);
+  const projectScope = new ProjectScope(config.projects);
   const toolsets = config.toolsets ?? DEFAULT_TOOLSETS;
   const availableToolNames = getAvailableTools(config.scopes, toolsets);
 
@@ -91,6 +147,9 @@ export function createServer(config: JiraConfig) {
     ...createFieldTools(client),
     ...createWorklogTools(client),
     ...createMetaTools(client),
+    ...createAgileTools(client),
+    ...createVersionTools(client),
+    ...createFilterTools(client),
   };
 
   const server = new McpServer(
@@ -99,7 +158,7 @@ export function createServer(config: JiraConfig) {
       version: SERVER_VERSION,
       description: 'MCP server for Atlassian Jira with scoped API tokens',
     },
-    { instructions: buildInstructions(toolsets, config.scopes) },
+    { instructions: buildInstructions(toolsets, config.scopes, projectScope) },
   );
 
   // Deterministic ordering lets clients cache the tool list and improves
@@ -112,7 +171,8 @@ export function createServer(config: JiraConfig) {
     server.tool(name, tool.description, shape, async (args) => {
       try {
         enforceScope(name, config.scopes);
-        const result = await tool.handler(args as Record<string, unknown>);
+        const scoped = applyProjectScope(projectScope, args as Record<string, unknown>);
+        const result = await tool.handler(scoped);
         return {
           content: result.content,
           isError: result.isError,
