@@ -53,7 +53,7 @@ function parseInline(line: string): AdfNode[] {
   const codeSpans: string[] = [];
   const shielded = line.replace(/`([^`]+)`/g, (_m, code: string) => {
     codeSpans.push(code);
-    return `\u0000CODE${codeSpans.length - 1}\u0000`;
+    return `\uE000CODE${codeSpans.length - 1}\uE000`;
   });
 
   // Links become placeholders too, so emphasis inside a label doesn't split the mark.
@@ -61,15 +61,15 @@ function parseInline(line: string): AdfNode[] {
   const withLinks = shielded
     .replace(MD_LINK_RE, (_m, label: string, href: string) => {
       links.push({ label, href });
-      return `\u0000LINK${links.length - 1}\u0000`;
+      return `\uE000LINK${links.length - 1}\uE000`;
     })
     .replace(WIKI_LINK_RE, (_m, label: string, href: string) => {
       links.push({ label, href });
-      return `\u0000LINK${links.length - 1}\u0000`;
+      return `\uE000LINK${links.length - 1}\uE000`;
     })
     .replace(BARE_URL_RE, (url: string) => {
       links.push({ label: url, href: url });
-      return `\u0000LINK${links.length - 1}\u0000`;
+      return `\uE000LINK${links.length - 1}\uE000`;
     });
 
   walkEmphasis(withLinks, [], tokens);
@@ -77,11 +77,11 @@ function parseInline(line: string): AdfNode[] {
   const nodes: AdfNode[] = [];
   for (const token of tokens) {
     // Re-expand placeholders, emitting a separate node per shielded run.
-    const parts = token.text.split(/(\u0000(?:CODE|LINK)\d+\u0000)/);
+    const parts = token.text.split(/(\uE000(?:CODE|LINK)\d+\uE000)/);
     for (const part of parts) {
       if (!part) continue;
 
-      const codeMatch = /^\u0000CODE(\d+)\u0000$/.exec(part);
+      const codeMatch = /^\uE000CODE(\d+)\uE000$/.exec(part);
       if (codeMatch) {
         nodes.push({
           type: 'text',
@@ -91,7 +91,7 @@ function parseInline(line: string): AdfNode[] {
         continue;
       }
 
-      const linkMatch = /^\u0000LINK(\d+)\u0000$/.exec(part);
+      const linkMatch = /^\uE000LINK(\d+)\uE000$/.exec(part);
       if (linkMatch) {
         const { label, href } = links[Number(linkMatch[1])];
         nodes.push({
@@ -481,16 +481,16 @@ function parseLinksOnly(line: string): AdfNode[] {
   const shielded = line
     .replace(WIKI_LINK_RE, (_m, label: string, href: string) => {
       links.push({ label, href });
-      return `\u0000LINK${links.length - 1}\u0000`;
+      return `\uE000LINK${links.length - 1}\uE000`;
     })
     .replace(BARE_URL_RE, (url: string) => {
       links.push({ label: url, href: url });
-      return `\u0000LINK${links.length - 1}\u0000`;
+      return `\uE000LINK${links.length - 1}\uE000`;
     });
 
-  for (const part of shielded.split(/(\u0000LINK\d+\u0000)/)) {
+  for (const part of shielded.split(/(\uE000LINK\d+\uE000)/)) {
     if (!part) continue;
-    const m = /^\u0000LINK(\d+)\u0000$/.exec(part);
+    const m = /^\uE000LINK(\d+)\uE000$/.exec(part);
     if (m) {
       const { label, href } = links[Number(m[1])];
       nodes.push({ type: 'text', text: label, marks: [{ type: 'link', attrs: { href } }] });
