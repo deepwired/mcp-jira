@@ -181,7 +181,7 @@ Revised after the competitive/demand research ([`research/competitive-landscape.
 
 | # | Decision | Rationale |
 |---|---|---|
-| D1 | **Build agile support** | The blocking claim was factually backwards. Spec + two dated empirical confirmations. See research doc §1 |
+| D1 | **Build agile support** | The blocking claim was factually backwards. Confirmed on a live tenant 2026-09-20: granular-only token, 200 on board and sprint reads and writes. See research doc §1 |
 | D2 | **Static toolset gating, lean default** | 50 tools sits inside the documented 30–50 degradation band and above Cursor's silent 40-tool truncation. See `tool-surface-scaling.md` |
 | D3 | **No in-server dynamic tool discovery** | Mutating tool definitions invalidates the entire prompt cache; Claude Code already defers MCP tools; it wouldn't help Cursor anyway, which caps before our search tool could run |
 | D4 | **Explicit `JIRA_SCOPES` config stays** | Scopes cannot be read back from a token or edited. Auto-detection is impossible |
@@ -198,12 +198,16 @@ Revised after the competitive/demand research ([`research/competitive-landscape.
 
 ## Open questions / smoke tests
 
-1. **Agile reachability** — expected `200`, but unverified against a live scoped token:
-   ```
-   curl -s -o /dev/null -w "%{http_code}\n" -u "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" \
-     "https://api.atlassian.com/ex/jira/$JIRA_CLOUD_ID/rest/agile/1.0/board?maxResults=1"
-   ```
-2. **POST behaviour on granular scopes** — one third-party report claims granular tokens 401 on all POSTs. Likely a client-side artifact and contradicted by later evidence, but worth 15 minutes against a scratch project before release.
+1. ~~**Agile reachability**~~ — **RESOLVED 2026-09-20.** A token carrying only
+   the four `jira-software` scopes returned **200** from `/rest/agile/1.0/board`
+   and `/board/{id}/sprint`, while every platform endpoint returned 401 for want
+   of a classic scope. Create, update and move-issues all succeeded. The
+   community claim that scoped tokens cannot reach the Software API is wrong.
+   See `research/scoped-tokens-api-reach.md` §1.
+2. ~~**POST behaviour on granular scopes**~~ — **DISPROVEN 2026-09-20.** The
+   report claiming granular-scoped tokens 401 on every POST does not reproduce:
+   `POST /rest/agile/1.0/sprint` and `POST /sprint/{id}/issue` both succeeded on
+   a token holding only granular scopes.
 3. **ADF converter: dependency or hand-rolled?** (Phase 1)
 4. **Default toolset membership** — settled by D10: the default is today's 20 tools plus everything Phases 0–3 add. Phase 4 is opt-in.
 

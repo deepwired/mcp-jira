@@ -10,7 +10,7 @@ This document exists because the most-cited community answer on this topic is wr
 
 | Question | Answer | Confidence |
 |---|---|---|
-| Scoped token → `/rest/agile/1.0/*` (boards, sprints)? | **Yes.** The widely-repeated "no" is factually backwards. | High |
+| Scoped token → `/rest/agile/1.0/*` (boards, sprints)? | **Yes — confirmed empirically 2026-09-20.** The widely-repeated "no" is factually backwards. | **Verified** |
 | Scoped token → `/rest/servicedeskapi/*` (JSM)? | **Yes.** Both classic and granular scopes documented. | Medium-high |
 | Is there a published list of picker-selectable scopes? | **No.** The picker draws from the OAuth 2.0 3LO/Forge catalogs. | Medium-high |
 | Do worklogs / watchers / remote links / createmeta / filters / versions / components / bulk / changelog work? | **Yes**, all of them — with gotchas below. | High (docs), Medium (untested live) |
@@ -47,7 +47,41 @@ Verified structurally: **every one of the 78 `/rest/agile/1.0/*` and `/rest/soft
 | `GET /rest/agile/1.0/issue/{key}` | `read:issue:jira-software` |
 | `PUT /issue/{key}/estimation` | `write:issue:jira-software`, `read:issue-details:jira` |
 
-### Empirical confirmations
+### Confirmed on a live tenant, 2026-09-20
+
+We settled this ourselves rather than relying on the record. A scoped API token
+was minted against `browserstack.atlassian.net` carrying **only** these four
+scopes — no classic scopes at all:
+
+```
+read:board-scope:jira-software   read:sprint:jira-software
+write:sprint:jira-software       read:project:jira
+```
+
+Results through `https://api.atlassian.com/ex/jira/{cloudId}`:
+
+| Request | Status |
+|---|---|
+| `GET /rest/agile/1.0/board` | **200** |
+| `GET /rest/agile/1.0/board/{id}/sprint` | **200** |
+| `POST /rest/agile/1.0/sprint` (create) | **200** |
+| `POST /rest/agile/1.0/sprint/{id}` (update) | **200** |
+| `POST /rest/agile/1.0/sprint/{id}/issue` (move issues) | **200** |
+| `GET /rest/agile/1.0/board/{id}` (board config) | 401 — needs `read:board-scope.admin:jira-software` |
+| `GET /rest/software/1.0/board/{id}/issue` | 401 — needs `read:issue-details:jira` |
+| `DELETE /rest/agile/1.0/sprint/{id}` | 401 — needs `delete:sprint:jira-software` |
+| `GET /rest/api/3/myself` | 401 — no classic scope on this token |
+| `GET /rest/api/3/issue/{key}` | 401 — no classic scope on this token |
+
+The platform 401s are the control: they prove the agile 200s came from the
+`jira-software` scopes and nothing else. The three scope-specific 401s prove
+enforcement is granular and exactly as documented.
+
+**The picker does offer jira-software scopes.** All four were selectable when
+creating an "API token with scopes" with Jira as the app — which also resolves
+the open question in §2 below.
+
+### Earlier empirical confirmations from the record
 
 - **2025-11-21** — A service-account scoped token successfully hits `/rest/agile/1.0/board`. The reporter had `read:board-scope.admin:jira-software` + `read:board-scope:jira-software` and got 401 until adding **`read:project:jira`** — exactly matching the spec. The same thread shows the admin token-listing API returning those jira-software scopes, proving they are mintable on a scoped token.
 - **2026-04-20/21** — A second Community Champion replies to the "no granular scopes" claim with *"I tested and it works for me when I will add right scopes selected."* The OP confirms with a working request against `/board/{id}/sprint?state=active` using `read:board-scope:jira-software`, `read:issue-details:jira`, `read:sprint:jira-software`.
@@ -190,7 +224,7 @@ Three honest gaps, recorded so nobody re-derives them:
 
 1. **There is no Atlassian changelog entry covering scoped-token API surface at all** — not for the gateway, not for jira-software scope availability, not for JSM. Every positive answer here rests on the OpenAPI specs plus dated community empirics, never on an official "we support this" statement. Atlassian's support prose still says only "Jira and Confluence."
 2. **No dated public report** of a *personal* (id.atlassian.com) scoped token — as opposed to an org service-account token — hitting `/rest/servicedeskapi/`. Mechanically identical, but untested in the public record.
-3. **No post-Nov-2025 screenshot** of the full scope picker exists publicly. The claim that classic JSM scopes are back rests on ID-9094's "Fixed" resolution plus one Feb 2026 success report.
+3. **JSM classic scopes in the picker** remain unconfirmed by direct observation — that rests on ID-9094's "Fixed" resolution plus one Feb 2026 success report. The *jira-software* half of this gap is now closed: we selected all four board/sprint scopes ourselves on 2026-09-20.
 
 ---
 

@@ -237,6 +237,8 @@ Most Jira platform endpoints accept **either** a classic scope **or** its granul
 
 **Jira Software is the exception.** It publishes no classic scopes at all, so the `agile` toolset needs granular ones and cannot be satisfied by `read:jira-work`. Note `read:project:jira` is required alongside the board scope; without it `/rest/agile/1.0/board` returns 401 in a way that looks like a different problem entirely.
 
+> You may find community answers claiming scoped API tokens cannot reach the Jira Software API at all. **That is incorrect**, and we verified it: a token carrying only `read:board-scope:jira-software`, `read:sprint:jira-software`, `write:sprint:jira-software` and `read:project:jira` reads boards and sprints and creates sprints successfully, while returning 401 on every platform endpoint. Details in [docs/research/scoped-tokens-api-reach.md](docs/research/scoped-tokens-api-reach.md).
+
 | Toolset | Classic | Granular alternative |
 |---|---|---|
 | `core` | `read:jira-work`, `write:jira-work` | `read:issue:jira`, `write:issue:jira`, `read:comment:jira`, `write:comment:jira`, `read:project:jira`, `read:field:jira`, `read:issue-details:jira` |

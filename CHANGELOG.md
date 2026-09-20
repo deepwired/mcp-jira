@@ -122,9 +122,12 @@ rather than content loss.
 Seven of the bugs above were found only by live testing; the offline suite
 passed all 249 assertions while they were present. 260 tests now pass.
 
-**The `agile` toolset is the one part shipping unverified** — it requires
-`jira-software` scopes that the test token did not carry. It is opt-in and off
-by default.
+The `agile` toolset was verified separately against a second token carrying
+only the four `jira-software` scopes: boards and sprints listed, and sprint
+create, update and move-issues all succeeded, while every platform endpoint
+correctly returned 401 for want of a classic scope. That also settles a
+long-standing and incorrectly-answered question in the Atlassian community —
+scoped API tokens *can* reach `/rest/agile/1.0`.
 
 ## [1.2.0] — 2026-04-01
 
