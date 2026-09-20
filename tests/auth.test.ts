@@ -90,10 +90,64 @@ describe('parseScopes', () => {
     ]);
   });
 
-  it('filters out invalid scopes', () => {
-    expect(parseScopes('read:jira-work,invalid,write:jira-work')).toEqual([
+  it('throws on unrecognised scopes rather than silently dropping them', () => {
+    // Silently filtering used to leave an empty scope list, which registers zero
+    // tools with no error — the server would start up completely inert.
+    expect(() => parseScopes('read:jira-work,invalid,write:jira-work')).toThrow(
+      /Unrecognised scope\(s\) in JIRA_SCOPES: invalid/,
+    );
+  });
+
+  it('throws when every requested scope is unrecognised', () => {
+    expect(() => parseScopes('bogus:one,bogus:two')).toThrow(/bogus:one, bogus:two/);
+  });
+
+  it('deduplicates repeated scopes', () => {
+    expect(parseScopes('read:jira-work,read:jira-work')).toEqual(['read:jira-work']);
+  });
+
+  it('tolerates whitespace and trailing commas', () => {
+    expect(parseScopes(' read:jira-work , write:jira-work ,')).toEqual([
       'read:jira-work',
       'write:jira-work',
     ]);
+  });
+});
+
+describe('sanitizeError credential redaction', () => {
+  const TOKEN = 'not-a-real-token-0000000000000000';
+  const EMAIL = 'a@b.com';
+  const B64 = Buffer.from(`${EMAIL}:${TOKEN}`).toString('base64');
+
+  it('redacts the raw token', () => {
+    expect(sanitizeError(`boom ${TOKEN}`, TOKEN, EMAIL)).not.toContain(TOKEN);
+  });
+
+  it('redacts the base64 credential that actually travels in the header', () => {
+    // The token is sent as base64("email:token"). Redacting only the raw token
+    // left a trivially reversible credential in any message echoing a header.
+    const out = sanitizeError(`header Basic ${B64}`, TOKEN, EMAIL);
+    expect(out).not.toContain(B64);
+  });
+
+  it('redacts a base64 blob of the token alone', () => {
+    const tokenB64 = Buffer.from(TOKEN).toString('base64');
+    expect(sanitizeError(`value ${tokenB64}`, TOKEN, EMAIL)).not.toContain(tokenB64);
+  });
+
+  it('redacts an unfamiliar Basic header as a catch-all', () => {
+    const out = sanitizeError('Authorization: Basic c29tZU90aGVyQ3JlZGVudGlhbFZhbHVl', TOKEN, EMAIL);
+    expect(out).toContain('Basic [REDACTED]');
+    expect(out).not.toContain('c29tZU90aGVy');
+  });
+
+  it('leaves innocent text alone', () => {
+    expect(sanitizeError('Not found — check the identifier', TOKEN, EMAIL)).toBe(
+      'Not found — check the identifier',
+    );
+  });
+
+  it('works without an email, as the old two-arg signature did', () => {
+    expect(sanitizeError(`boom ${TOKEN}`, TOKEN)).not.toContain(TOKEN);
   });
 });

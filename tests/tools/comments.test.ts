@@ -317,8 +317,16 @@ describe('jira_list_comments', () => {
     });
 
     const tools = createCommentTools(new JiraClient(testConfig));
-    const result = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1' });
-    expect(result.content[0].text).toContain(
+
+    // Default format is now markdown.
+    const md = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1' });
+    expect(md.content[0].text).toContain(
+      'See [PR #42](https://github.com/org/repo/pull/42) for details',
+    );
+
+    // The pre-2.0 wiki markup is still available via format: "text".
+    const txt = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1', format: 'text' });
+    expect(txt.content[0].text).toContain(
       'See [PR #42|https://github.com/org/repo/pull/42] for details',
     );
   });
@@ -409,8 +417,116 @@ describe('jira_list_comments', () => {
     });
 
     const tools = createCommentTools(new JiraClient(testConfig));
-    const result = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1' });
-    const text = result.content[0].text;
-    expect(text).toContain('Line one\nLine two\nSee [link|https://example.com]');
+
+    // Markdown separates blocks with a blank line rather than a single newline.
+    const md = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1' });
+    expect(md.content[0].text).toContain(
+      'Line one\n\nLine two\n\nSee [link](https://example.com)',
+    );
+
+    const txt = await tools.jira_list_comments.handler({ issueKey: 'PROJ-1', format: 'text' });
+    expect(txt.content[0].text).toContain('Line one\nLine two\nSee [link|https://example.com]');
+  });
+});
+
+describe('comment write formats', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function captureBody(status = 201) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status,
+      json: () => Promise.resolve({ id: '999' }),
+      headers: new Headers(),
+    });
+    global.fetch = fetchMock;
+    return fetchMock;
+  }
+
+  it('sends markdown structure by default, not flattened paragraphs', async () => {
+    const fetchMock = captureBody();
+    const tools = createCommentTools(new JiraClient(testConfig));
+    await tools.jira_add_comment.handler({
+      issueKey: 'PROJ-1',
+      body: '## Heading\n\n- one\n- two',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.body.content[0].type).toBe('heading');
+    expect(body.body.content[1].type).toBe('bulletList');
+  });
+
+  it('format "text" keeps markdown syntax literal', async () => {
+    const fetchMock = captureBody();
+    const tools = createCommentTools(new JiraClient(testConfig));
+    await tools.jira_add_comment.handler({
+      issueKey: 'PROJ-1',
+      body: '## Not a heading',
+      format: 'text',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.body.content[0].type).toBe('paragraph');
+    expect(body.body.content[0].content[0].text).toBe('## Not a heading');
+  });
+
+  it('format "adf" passes a raw ADF document through', async () => {
+    const fetchMock = captureBody();
+    const tools = createCommentTools(new JiraClient(testConfig));
+    const raw = JSON.stringify({
+      type: 'doc',
+      version: 1,
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'raw' }] }],
+    });
+    await tools.jira_add_comment.handler({ issueKey: 'PROJ-1', body: raw, format: 'adf' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.body.content[0].content[0].text).toBe('raw');
+  });
+
+  it('format "adf" rejects invalid JSON with a usable message', async () => {
+    captureBody();
+    const tools = createCommentTools(new JiraClient(testConfig));
+    await expect(
+      tools.jira_add_comment.handler({ issueKey: 'PROJ-1', body: 'not json', format: 'adf' }),
+    ).rejects.toThrow(/not valid JSON/);
+  });
+});
+
+describe('jira_delete_comment', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('refuses without confirm: true', async () => {
+    const tools = createCommentTools(new JiraClient(testConfig));
+    const res = await tools.jira_delete_comment.handler({
+      issueKey: 'PROJ-1',
+      commentId: '100',
+      confirm: false,
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('safety guard');
+  });
+
+  it('issues a DELETE to the comment endpoint when confirmed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: () => Promise.resolve({}),
+      headers: new Headers({ 'content-length': '0' }),
+    });
+    global.fetch = fetchMock;
+
+    const tools = createCommentTools(new JiraClient(testConfig));
+    const res = await tools.jira_delete_comment.handler({
+      issueKey: 'PROJ-1',
+      commentId: '100',
+      confirm: true,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(fetchMock.mock.calls[0][0]).toContain('/rest/api/3/issue/PROJ-1/comment/100');
+    expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
   });
 });

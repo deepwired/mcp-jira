@@ -33,7 +33,16 @@ export function createProjectTools(client: JiraClient) {
 
         const data = res.data!;
         if (data.values.length === 0) {
-          return textResult('No projects found.');
+          // The request authenticated but returned nothing. There is an unresolved
+          // Atlassian defect where granular-scoped tokens return an empty project
+          // list instead of a 401, so do not report this as a plain fact.
+          return textResult(
+            'No projects returned.\n\n' +
+              'The request authenticated successfully, so this is either genuinely empty or a ' +
+              'permissions/scope problem reported as an empty result rather than an error. ' +
+              'Verify in the Jira web UI that this account can see projects. If it can, the ' +
+              'token is likely missing a project-read scope.',
+          );
         }
 
         const lines = data.values.map(

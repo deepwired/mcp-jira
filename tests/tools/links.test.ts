@@ -82,3 +82,83 @@ describe('jira_list_link_types', () => {
     expect(result.content[0].text).toContain('is blocked by');
   });
 });
+
+describe('remote links', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function mockJson(body: unknown, status = 200) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: status < 400,
+      status,
+      json: () => Promise.resolve(body),
+      headers: new Headers(),
+    });
+    global.fetch = fetchMock;
+    return fetchMock;
+  }
+
+  function tools() {
+    return createLinkTools(new JiraClient(testConfig));
+  }
+
+  it('lists remote links with url, title and id', async () => {
+    mockJson([
+      {
+        id: 10001,
+        relationship: 'documented by',
+        object: { url: 'https://wiki/x', title: 'Design doc', summary: 'the design' },
+      },
+    ]);
+    const res = await tools().jira_list_remote_links.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).toContain('Design doc');
+    expect(res.content[0].text).toContain('https://wiki/x');
+    expect(res.content[0].text).toContain('documented by');
+  });
+
+  it('reports no remote links plainly', async () => {
+    mockJson([]);
+    const res = await tools().jira_list_remote_links.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).toContain('No remote links');
+  });
+
+  it('creates a remote link with the nested object shape Jira expects', async () => {
+    const fetchMock = mockJson({ id: 10002 }, 201);
+    await tools().jira_create_remote_link.handler({
+      issueKey: 'PROJ-1',
+      url: 'https://example.com/pr/1',
+      title: 'PR #1',
+      relationship: 'implemented by',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.object.url).toBe('https://example.com/pr/1');
+    expect(body.object.title).toBe('PR #1');
+    expect(body.relationship).toBe('implemented by');
+  });
+
+  it('rejects a non-URL', async () => {
+    await expect(
+      tools().jira_create_remote_link.handler({
+        issueKey: 'PROJ-1',
+        url: 'not-a-url',
+        title: 'x',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('remote link deletion needs confirm: true', async () => {
+    const res = await tools().jira_delete_remote_link.handler({
+      issueKey: 'PROJ-1',
+      linkId: '10001',
+      confirm: false,
+    });
+    expect(res.isError).toBe(true);
+  });
+
+  it('issue link removal needs confirm: true', async () => {
+    const res = await tools().jira_remove_link.handler({ linkId: '999', confirm: false });
+    expect(res.isError).toBe(true);
+  });
+});

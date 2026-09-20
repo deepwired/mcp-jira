@@ -1,4 +1,11 @@
-export type Scope = 'read:jira-work' | 'write:jira-work' | 'read:jira-user' | 'read:me';
+import type { Toolset } from './scope-catalog.js';
+
+/**
+ * A scope string. Deliberately not a union: Atlassian publishes ~170 granular
+ * Jira scopes and adds more over time. Validation happens at runtime against
+ * KNOWN_SCOPES in scope-catalog.ts, which is the single place to update.
+ */
+export type Scope = string;
 
 export interface JiraConfig {
   instance: string;
@@ -6,6 +13,8 @@ export interface JiraConfig {
   apiToken: string;
   userEmail: string;
   scopes: Scope[];
+  toolsets?: Toolset[];
+  projects?: string[] | null;
 }
 
 export interface ApiResponse<T = unknown> {

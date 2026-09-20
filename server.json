@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.deepwired/mcp-jira-scoped",
-  "description": "Jira MCP server with scoped API tokens via api.atlassian.com gateway",
+  "description": "Jira MCP server with scoped API tokens via the api.atlassian.com gateway \u2014 server-side scope enforcement, toolset gating, and project allowlisting",
   "repository": {
     "url": "https://github.com/deepwired/mcp-jira",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "2.0.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "mcp-jira-scoped",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -37,13 +37,25 @@
         },
         {
           "name": "JIRA_SCOPES",
-          "description": "Comma-separated scopes: read:jira-work, write:jira-work, read:jira-user, read:me. Defaults to read:jira-work",
+          "description": "Comma-separated scopes the server may use. Classic (read:jira-work, write:jira-work, read:jira-user, read:me) or granular (read:issue:jira, ...). Defaults to read:jira-work. Unrecognised values fail at startup.",
           "isRequired": false,
           "isSecret": false
         },
         {
           "name": "JIRA_CLOUD_ID",
           "description": "Atlassian Cloud ID (auto-fetched if not set). Find at https://yoursite.atlassian.net/_edge/tenant_info",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "JIRA_TOOLSETS",
+          "description": "Comma-separated capability groups to register: core, users, attachments, links, worklogs, metadata, agile, versions, filters, labels. Also accepts 'default' and 'all'. Defaults to the six core groups (34 tools).",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "JIRA_PROJECTS",
+          "description": "Optional allowlist of project keys (e.g. 'PROJ,OPS'). Requests naming other projects are refused before any API call and JQL is constrained server-side.",
           "isRequired": false,
           "isSecret": false
         }

@@ -1,7 +1,22 @@
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
 import { JiraIssue, ToolResult } from '../types.js';
-import { plainTextToAdf } from './comments.js';
+import { toAdf, fromAdf, type ContentFormat } from '../adf.js';
+
+const formatIn = z
+  .enum(['markdown', 'text', 'adf'])
+  .optional()
+  .default('markdown')
+  .describe(
+    'How to interpret supplied body text. "markdown" (default) supports headings, lists, ' +
+      'tables, code blocks and emphasis. "text" is literal with URL auto-linking. "adf" takes raw ADF JSON.',
+  );
+
+const formatOut = z
+  .enum(['markdown', 'text', 'adf'])
+  .optional()
+  .default('markdown')
+  .describe('How to render the description. "markdown" (default) preserves structure.');
 
 const getIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
@@ -16,6 +31,7 @@ const getIssueSchema = z.object({
     .describe(
       'When true, fetches all fields (including customfield_*) and appends them to the output.',
     ),
+  format: formatOut,
 });
 
 const createIssueSchema = z.object({
@@ -31,19 +47,32 @@ const createIssueSchema = z.object({
     .record(z.unknown())
     .optional()
     .describe('Custom fields as key-value pairs, e.g. {"customfield_10104": {"value": "Product"}}'),
+  format: formatIn,
 });
 
 const updateIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required'),
   summary: z.string().optional(),
-  description: z.string().optional(),
-  assigneeAccountId: z.string().optional(),
-  priority: z.string().optional(),
-  labels: z.array(z.string()).optional(),
+  description: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Plain text description. Pass null to clear the field.'),
+  assigneeAccountId: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Account ID to assign to. Pass null to unassign.'),
+  priority: z.string().nullable().optional().describe('Priority name. Pass null to clear.'),
+  labels: z.array(z.string()).optional().describe('Replaces all labels. Pass [] to clear.'),
   customFields: z
     .record(z.unknown())
     .optional()
-    .describe('Custom fields as key-value pairs, e.g. {"customfield_10016": 2}'),
+    .describe(
+      'Custom fields as key-value pairs, e.g. {"customfield_10016": 2}. ' +
+        'Pass null as a value to clear that field.',
+    ),
+  format: formatIn,
 });
 
 const transitionIssueSchema = z.object({
@@ -59,10 +88,22 @@ const transitionIssueSchema = z.object({
       'Fields required by the transition screen, e.g. {"resolution": {"name": "Fixed"}}. Use jira_get_transitions to discover required fields.',
     ),
   comment: z.string().optional().describe('Optional comment to add when transitioning.'),
+  format: formatIn,
 });
 
 const getTransitionsSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
+});
+
+const assignIssueSchema = z.object({
+  issueKey: z.string().min(1, 'issueKey is required'),
+  accountId: z
+    .string()
+    .nullable()
+    .describe(
+      'Account ID to assign to. Pass null to unassign. ' +
+        'Use jira_search_users or jira_get_myself to resolve a name or email to an account ID.',
+    ),
 });
 
 const deleteIssueSchema = z.object({
@@ -99,7 +140,11 @@ const STANDARD_FIELDS = new Set([
   'resolution',
 ]);
 
-function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
+function formatIssue(
+  issue: JiraIssue,
+  includeCustomFields = false,
+  format: ContentFormat = 'markdown',
+): string {
   const f = issue.fields;
   const lines = [
     `**${issue.key}**: ${f.summary ?? 'No summary'}`,
@@ -111,10 +156,12 @@ function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
     `Labels: ${Array.isArray(f.labels) && f.labels.length > 0 ? (f.labels as string[]).join(', ') : 'None'}`,
   ];
 
-  if (f.description) {
-    lines.push(
-      `\nDescription:\n${typeof f.description === 'string' ? f.description : JSON.stringify(f.description, null, 2)}`,
-    );
+  // A cleared rich-text field comes back as an empty ADF document rather than
+  // null, and an object is always truthy — so check the rendered text instead,
+  // or every cleared description prints an empty "Description:" header.
+  const description = f.description ? fromAdf(f.description, format).trim() : '';
+  if (description !== '') {
+    lines.push(`\nDescription:\n${description}`);
   }
 
   if (includeCustomFields) {
@@ -154,7 +201,7 @@ export function createIssueTools(client: JiraClient) {
           `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}?fields=${fields}`,
         );
         if (!res.ok) return textResult(res.error!, true);
-        return textResult(formatIssue(res.data!, parsed.includeCustomFields));
+        return textResult(formatIssue(res.data!, parsed.includeCustomFields, parsed.format));
       },
     },
 
@@ -171,7 +218,7 @@ export function createIssueTools(client: JiraClient) {
         };
 
         if (parsed.description) {
-          fields.description = plainTextToAdf(parsed.description);
+          fields.description = toAdf(parsed.description, parsed.format);
         }
         if (parsed.assigneeAccountId) {
           fields.assignee = { accountId: parsed.assigneeAccountId };
@@ -203,14 +250,19 @@ export function createIssueTools(client: JiraClient) {
         const parsed = updateIssueSchema.parse(args);
         const fields: Record<string, unknown> = {};
 
+        // undefined = leave untouched; null = clear the field in Jira.
         if (parsed.summary !== undefined) fields.summary = parsed.summary;
         if (parsed.description !== undefined) {
-          fields.description = plainTextToAdf(parsed.description);
+          fields.description =
+            parsed.description === null ? null : toAdf(parsed.description, parsed.format);
         }
         if (parsed.assigneeAccountId !== undefined) {
-          fields.assignee = { accountId: parsed.assigneeAccountId };
+          fields.assignee =
+            parsed.assigneeAccountId === null ? null : { accountId: parsed.assigneeAccountId };
         }
-        if (parsed.priority !== undefined) fields.priority = { name: parsed.priority };
+        if (parsed.priority !== undefined) {
+          fields.priority = parsed.priority === null ? null : { name: parsed.priority };
+        }
         if (parsed.labels !== undefined) fields.labels = parsed.labels;
         if (parsed.customFields) {
           Object.assign(fields, parsed.customFields);
@@ -257,7 +309,7 @@ export function createIssueTools(client: JiraClient) {
         }
         if (parsed.comment) {
           body.update = {
-            comment: [{ add: { body: plainTextToAdf(parsed.comment) } }],
+            comment: [{ add: { body: toAdf(parsed.comment, parsed.format) } }],
           };
         }
 
@@ -323,6 +375,26 @@ export function createIssueTools(client: JiraClient) {
         }
 
         return textResult(lines.join('\n'));
+      },
+    },
+
+    jira_assign_issue: {
+      description:
+        'Assign a Jira issue to a user, or unassign it by passing accountId: null. ' +
+        'A focused alternative to jira_update_issue when assignment is the only change.',
+      inputSchema: assignIssueSchema,
+      handler: async (args: Record<string, unknown>): Promise<ToolResult> => {
+        const parsed = assignIssueSchema.parse(args);
+        const res = await client.put(
+          `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}/assignee`,
+          { accountId: parsed.accountId },
+        );
+        if (!res.ok) return textResult(res.error!, true);
+        return textResult(
+          parsed.accountId === null
+            ? `Issue **${parsed.issueKey}** unassigned.`
+            : `Issue **${parsed.issueKey}** assigned to ${parsed.accountId}.`,
+        );
       },
     },
 

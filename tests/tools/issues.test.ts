@@ -388,3 +388,122 @@ describe('jira_delete_issue', () => {
     expect(result.content[0].text).toContain('deleted');
   });
 });
+
+describe('jira_update_issue field clearing', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function captureBody() {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: () => Promise.resolve({}),
+      headers: new Headers({ 'content-length': '0' }),
+    });
+    global.fetch = fetchMock;
+    return fetchMock;
+  }
+
+  it('null assignee unassigns rather than being ignored', async () => {
+    const fetchMock = captureBody();
+    const tools = createIssueTools(makeClient());
+    const res = await tools.jira_update_issue.handler({
+      issueKey: 'PROJ-1',
+      assigneeAccountId: null,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).fields.assignee).toBeNull();
+  });
+
+  it('null priority and description clear those fields', async () => {
+    const fetchMock = captureBody();
+    const tools = createIssueTools(makeClient());
+    await tools.jira_update_issue.handler({
+      issueKey: 'PROJ-1',
+      priority: null,
+      description: null,
+    });
+    const fields = JSON.parse(fetchMock.mock.calls[0][1].body).fields;
+    expect(fields.priority).toBeNull();
+    expect(fields.description).toBeNull();
+  });
+
+  it('omitted fields are left untouched, not cleared', async () => {
+    const fetchMock = captureBody();
+    const tools = createIssueTools(makeClient());
+    await tools.jira_update_issue.handler({ issueKey: 'PROJ-1', summary: 'Only this' });
+    const fields = JSON.parse(fetchMock.mock.calls[0][1].body).fields;
+    expect(fields).toEqual({ summary: 'Only this' });
+  });
+
+  it('a null custom field value is forwarded so the field can be cleared', async () => {
+    const fetchMock = captureBody();
+    const tools = createIssueTools(makeClient());
+    await tools.jira_update_issue.handler({
+      issueKey: 'PROJ-1',
+      customFields: { customfield_10016: null },
+    });
+    const fields = JSON.parse(fetchMock.mock.calls[0][1].body).fields;
+    expect(fields.customfield_10016).toBeNull();
+  });
+});
+
+describe('cleared rich-text fields', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('an empty ADF document renders as no description at all', async () => {
+    // Jira returns {type:"doc",version:1,content:[]} for a cleared field, not
+    // null. An object is truthy, so a naive check printed an empty header.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          key: 'PROJ-1',
+          id: '1',
+          fields: {
+            summary: 'Cleared',
+            status: { name: 'Open' },
+            description: { type: 'doc', version: 1, content: [] },
+          },
+        }),
+      headers: new Headers(),
+    });
+
+    const tools = createIssueTools(makeClient());
+    const res = await tools.jira_get_issue.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).not.toContain('Description:');
+  });
+
+  it('still renders a description that has content', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          key: 'PROJ-1',
+          id: '1',
+          fields: {
+            summary: 'Has one',
+            status: { name: 'Open' },
+            description: {
+              type: 'doc',
+              version: 1,
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'real text' }] }],
+            },
+          },
+        }),
+      headers: new Headers(),
+    });
+
+    const tools = createIssueTools(makeClient());
+    const res = await tools.jira_get_issue.handler({ issueKey: 'PROJ-1' });
+    expect(res.content[0].text).toContain('Description:');
+    expect(res.content[0].text).toContain('real text');
+  });
+});

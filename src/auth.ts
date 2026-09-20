@@ -1,4 +1,6 @@
 import { JiraConfig, Scope } from './types.js';
+import { KNOWN_SCOPES, parseToolsets } from './scope-catalog.js';
+import { parseProjects } from './project-scope.js';
 
 export function buildHeaders(email: string, token: string): Record<string, string> {
   const basic = Buffer.from(`${email}:${token}`).toString('base64');
@@ -13,8 +15,26 @@ export function buildBaseUrl(cloudId: string): string {
   return `https://api.atlassian.com/ex/jira/${cloudId}`;
 }
 
-export function sanitizeError(message: string, token: string): string {
-  return message.replaceAll(token, '[REDACTED]');
+/**
+ * Strip credentials from anything on its way to the model or a log.
+ *
+ * The raw token is the obvious case, but the credential actually travels as
+ * base64("email:token") in the Authorization header, and base64 is not
+ * protection — anything echoing a request header would have leaked a
+ * reversible credential. Both forms are redacted, plus any bare `Basic <blob>`
+ * in case the email is not the one we hold.
+ */
+export function sanitizeError(message: string, token: string, email?: string): string {
+  let out = message;
+  if (token) {
+    out = out.replaceAll(token, '[REDACTED]');
+    out = out.replaceAll(Buffer.from(token).toString('base64'), '[REDACTED]');
+    if (email) {
+      out = out.replaceAll(Buffer.from(`${email}:${token}`).toString('base64'), '[REDACTED]');
+    }
+  }
+  // Catch-all for an Authorization value we did not construct ourselves.
+  return out.replace(/\bBasic\s+[A-Za-z0-9+/=]{16,}/g, 'Basic [REDACTED]');
 }
 
 export async function fetchCloudId(instance: string): Promise<string> {
@@ -57,24 +77,38 @@ export async function loadConfig(): Promise<JiraConfig> {
   }
 
   const scopes = parseScopes(process.env.JIRA_SCOPES);
+  const toolsets = parseToolsets(process.env.JIRA_TOOLSETS);
+  const projects = parseProjects(process.env.JIRA_PROJECTS);
 
-  return { instance, cloudId, apiToken, userEmail, scopes };
+  return { instance, cloudId, apiToken, userEmail, scopes, toolsets, projects };
 }
 
 export function parseScopes(raw: string | undefined): Scope[] {
-  const VALID_SCOPES: Set<string> = new Set([
-    'read:jira-work',
-    'write:jira-work',
-    'read:jira-user',
-    'read:me',
-  ]);
-
   if (!raw || raw.trim() === '') {
     return ['read:jira-work'];
   }
 
-  return raw
+  const requested = raw
     .split(',')
     .map((s) => s.trim())
-    .filter((s) => VALID_SCOPES.has(s)) as Scope[];
+    .filter((s) => s !== '');
+
+  if (requested.length === 0) {
+    return ['read:jira-work'];
+  }
+
+  // Fail loudly. Silently dropping unrecognised scopes used to leave the server
+  // with an empty scope list, which registers zero tools with no error at all.
+  const unknown = requested.filter((s) => !KNOWN_SCOPES.has(s));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unrecognised scope(s) in JIRA_SCOPES: ${unknown.join(', ')}.\n` +
+        `Supported scopes: ${[...KNOWN_SCOPES].sort().join(', ')}.\n` +
+        'Check for typos. Note that scopes cannot be read back from an Atlassian token, ' +
+        'so this server cannot verify them against the token itself — JIRA_SCOPES must ' +
+        'match what you selected when the token was created.',
+    );
+  }
+
+  return [...new Set(requested)] as Scope[];
 }
