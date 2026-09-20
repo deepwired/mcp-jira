@@ -14,6 +14,7 @@ export const TOOL_SCOPE_MAP: Record<string, Scope[]> = {
   jira_update_issue: ['write:jira-work'],
   jira_add_comment: ['write:jira-work'],
   jira_update_comment: ['write:jira-work'],
+  jira_delete_comment: ['write:jira-work'],
   jira_transition_issue: ['write:jira-work'],
   jira_delete_issue: ['write:jira-work'],
   jira_link_issues: ['write:jira-work'],

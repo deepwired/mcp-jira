@@ -1,7 +1,22 @@
 import { z } from 'zod';
 import { JiraClient } from '../client.js';
 import { JiraIssue, ToolResult } from '../types.js';
-import { plainTextToAdf } from './comments.js';
+import { toAdf, fromAdf, type ContentFormat } from '../adf.js';
+
+const formatIn = z
+  .enum(['markdown', 'text', 'adf'])
+  .optional()
+  .default('markdown')
+  .describe(
+    'How to interpret supplied body text. "markdown" (default) supports headings, lists, ' +
+      'tables, code blocks and emphasis. "text" is literal with URL auto-linking. "adf" takes raw ADF JSON.',
+  );
+
+const formatOut = z
+  .enum(['markdown', 'text', 'adf'])
+  .optional()
+  .default('markdown')
+  .describe('How to render the description. "markdown" (default) preserves structure.');
 
 const getIssueSchema = z.object({
   issueKey: z.string().min(1, 'issueKey is required (e.g. PROJ-123)'),
@@ -16,6 +31,7 @@ const getIssueSchema = z.object({
     .describe(
       'When true, fetches all fields (including customfield_*) and appends them to the output.',
     ),
+  format: formatOut,
 });
 
 const createIssueSchema = z.object({
@@ -31,6 +47,7 @@ const createIssueSchema = z.object({
     .record(z.unknown())
     .optional()
     .describe('Custom fields as key-value pairs, e.g. {"customfield_10104": {"value": "Product"}}'),
+  format: formatIn,
 });
 
 const updateIssueSchema = z.object({
@@ -55,6 +72,7 @@ const updateIssueSchema = z.object({
       'Custom fields as key-value pairs, e.g. {"customfield_10016": 2}. ' +
         'Pass null as a value to clear that field.',
     ),
+  format: formatIn,
 });
 
 const transitionIssueSchema = z.object({
@@ -70,6 +88,7 @@ const transitionIssueSchema = z.object({
       'Fields required by the transition screen, e.g. {"resolution": {"name": "Fixed"}}. Use jira_get_transitions to discover required fields.',
     ),
   comment: z.string().optional().describe('Optional comment to add when transitioning.'),
+  format: formatIn,
 });
 
 const getTransitionsSchema = z.object({
@@ -110,7 +129,11 @@ const STANDARD_FIELDS = new Set([
   'resolution',
 ]);
 
-function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
+function formatIssue(
+  issue: JiraIssue,
+  includeCustomFields = false,
+  format: ContentFormat = 'markdown',
+): string {
   const f = issue.fields;
   const lines = [
     `**${issue.key}**: ${f.summary ?? 'No summary'}`,
@@ -123,9 +146,7 @@ function formatIssue(issue: JiraIssue, includeCustomFields = false): string {
   ];
 
   if (f.description) {
-    lines.push(
-      `\nDescription:\n${typeof f.description === 'string' ? f.description : JSON.stringify(f.description, null, 2)}`,
-    );
+    lines.push(`\nDescription:\n${fromAdf(f.description, format)}`);
   }
 
   if (includeCustomFields) {
@@ -165,7 +186,7 @@ export function createIssueTools(client: JiraClient) {
           `/rest/api/3/issue/${encodeURIComponent(parsed.issueKey)}?fields=${fields}`,
         );
         if (!res.ok) return textResult(res.error!, true);
-        return textResult(formatIssue(res.data!, parsed.includeCustomFields));
+        return textResult(formatIssue(res.data!, parsed.includeCustomFields, parsed.format));
       },
     },
 
@@ -182,7 +203,7 @@ export function createIssueTools(client: JiraClient) {
         };
 
         if (parsed.description) {
-          fields.description = plainTextToAdf(parsed.description);
+          fields.description = toAdf(parsed.description, parsed.format);
         }
         if (parsed.assigneeAccountId) {
           fields.assignee = { accountId: parsed.assigneeAccountId };
@@ -218,7 +239,7 @@ export function createIssueTools(client: JiraClient) {
         if (parsed.summary !== undefined) fields.summary = parsed.summary;
         if (parsed.description !== undefined) {
           fields.description =
-            parsed.description === null ? null : plainTextToAdf(parsed.description);
+            parsed.description === null ? null : toAdf(parsed.description, parsed.format);
         }
         if (parsed.assigneeAccountId !== undefined) {
           fields.assignee =
@@ -273,7 +294,7 @@ export function createIssueTools(client: JiraClient) {
         }
         if (parsed.comment) {
           body.update = {
-            comment: [{ add: { body: plainTextToAdf(parsed.comment) } }],
+            comment: [{ add: { body: toAdf(parsed.comment, parsed.format) } }],
           };
         }
 
