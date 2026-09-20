@@ -1,7 +1,7 @@
 {
   "name": "mcp-jira-scoped",
   "version": "2.0.0",
-  "description": "MCP server for Atlassian Jira with scoped API tokens — the only MCP server that supports Atlassian's modern scoped authentication",
+  "description": "MCP server for Atlassian Jira built on scoped API tokens \u2014 server-side scope enforcement, configurable toolsets, project allowlisting, and Markdown/ADF fidelity",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm run check:release && npm test",
+    "check:release": "node scripts/check-release.mjs"
   },
   "keywords": [
     "mcp",
@@ -34,7 +35,14 @@
     "issue-tracking",
     "tools",
     "typescript",
-    "cli"
+    "cli",
+    "toolsets",
+    "worklogs",
+    "sprints",
+    "agile",
+    "adf",
+    "markdown",
+    "scope-enforcement"
   ],
   "author": "Deep Singh Baweja",
   "license": "Apache-2.0",

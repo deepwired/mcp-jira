@@ -1,5 +1,4 @@
-build:
-  dockerBuildPath: .
+# Smithery runs the published npm package directly; there is no container build.
 startCommand:
   type: stdio
   configSchema:
@@ -17,11 +16,18 @@ startCommand:
         description: "Email associated with the API token"
       jiraApiToken:
         type: string
-        description: "Scoped API token from Atlassian"
+        description: "Scoped API token from Atlassian (ATATT... prefix)"
       jiraScopes:
         type: string
         default: "read:jira-work"
-        description: "Comma-separated scopes: read:jira-work, write:jira-work, read:jira-user, read:me"
+        description: "Comma-separated scopes the server may use. Classic (read:jira-work, write:jira-work, read:jira-user, read:me) or granular (read:issue:jira, ...). Unrecognised values fail at startup."
+      jiraToolsets:
+        type: string
+        default: "default"
+        description: "Capability groups to register: core, users, attachments, links, worklogs, metadata, agile, versions, filters, labels. Also accepts 'default' and 'all'."
+      jiraProjects:
+        type: string
+        description: "Optional allowlist of project keys (e.g. 'PROJ,OPS'). Requests naming other projects are refused before any API call."
       jiraCloudId:
         type: string
         description: "Atlassian Cloud ID (auto-fetched if not set)"
@@ -34,6 +40,8 @@ startCommand:
         JIRA_USER_EMAIL: config.jiraUserEmail,
         JIRA_API_TOKEN: config.jiraApiToken,
         ...(config.jiraScopes ? { JIRA_SCOPES: config.jiraScopes } : {}),
+        ...(config.jiraToolsets ? { JIRA_TOOLSETS: config.jiraToolsets } : {}),
+        ...(config.jiraProjects ? { JIRA_PROJECTS: config.jiraProjects } : {}),
         ...(config.jiraCloudId ? { JIRA_CLOUD_ID: config.jiraCloudId } : {})
       }
     })
